@@ -1,0 +1,111 @@
+# Same as Black.
+line-length = 88
+
+# Python version
+target-version = "py310"
+
+# Rules list https://docs.astral.sh/ruff/rules/
+# Enable rules
+lint.select = [
+    "F",  # pyflakes
+    "D",  # pydocstyle
+    "UP", # pyupgrade
+
+    "PERF", # perflint. performance anti-patterns
+    "E",    # pycodestyle-error
+    "W",    # pycodestyle-warning
+    "I",    # isort
+    "PL",   # pylint
+    "NPY",  # NumPy-specific
+    "N",    # pep8-naming
+
+    "ANN", # flake8-annotations
+    "A",   # flake8-builtins
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "PT",  # flake8-pytest-style
+    "PIE", # flake8-pie
+
+    "C90",     # McCabe complexity
+    "E713",    # use 'key not in list'
+    "PGH003",  # forbid blanket 'type: ignore' comments
+    "PLR0402", # useless import alias
+    "SIM101",  # merge 'isinstance' calls
+    "SIM109",  # use a tuple for multiple comparisons
+    "SIM110",  # convert loop to 'any'
+    "SIM118",  # use 'key in dict'
+    "SIM2",    # simplify boolean comparisons
+]
+
+# Global ignore rules
+lint.ignore = [
+
+    # pydocstyle
+    "D104", # __init__.py docstring
+    "D107", # __init__ docstring
+    "D415", # first line punctuation
+
+    # pycodestype-error
+    "E501", # lLine too long
+
+    # pycodestyle-warning
+    "W505", # doc-line-too-long
+
+]
+
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+lint.fixable = ["ALL"]
+lint.unfixable = ["B006"]
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "*_pb2.py",
+    "*.pyi",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "docs",
+]
+
+# Allow unused variables when underscore-prefixed.
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.pylint]
+max-args = 7
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["D100", "D103", "D104", "ANN001", "ANN201"]
+"*/messages/*" = ["D105"]
+"src/*" = ["D105"]
+"src/*.pyi" = ["PLR0913"]
+
+[lint.isort]
+known-first-party = ["src"]
+lines-between-types = 1
+
+[lint.pep8-naming]
+ignore-names = ["test_*", "F"]
