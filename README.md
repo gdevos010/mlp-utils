@@ -18,13 +18,13 @@ pip install mlp-utils
 A collection of activation functions for MLPs.
 
 - `ReluSquared`: `max(0, x)^2`, with an option to be signed.
-- `gelu2`: `GELU(x)^2`
+- `Gelu2`: `GELU(x)^2`
 - `BSiLU`: `(x + α) * sigmoid(x) - α / 2`
 - `NeLU`: `-α / (1 + x^2)`, often used as a backward function in STE.
 - `Sugar`: A straight-through estimator that uses the backward function only for the negative part of the input.
 - `StraightThroughEstimator`: A generic straight-through estimator that can be configured with different forward and backward passes.
 - `ReluNelu`: An activation that uses ReLU in the forward pass and NeLU in the backward pass for the negative part, using the `Sugar` module.
-- `sugar_relu`: A straight-through estimator with a ReLU forward pass and a sigmoid backward pass.
+- `SugarReLU`: A straight-through estimator with a ReLU forward pass and a sigmoid backward pass.
 
 ### Initialization
 
@@ -50,20 +50,47 @@ ffn = FeedForward(
 )
 ```
 
-#### nGPT
+#### NGPT
 
-The `nGPTFeedForward` class implements the feed-forward block from the paper "nGPT: Normalized Transformer with Representation Learning on the Hypersphere."
+The `NGPT` class is a wrapper that implements the feed-forward block from the paper "nGPT: Normalized Transformer with Representation Learning on the Hypersphere."
+
+This module takes a standard `FeedForward` network and applies the nGPT update rule, which involves normalizing the hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere.
 
 ```python
-from mlp_utils.layers.ngpt import nGPTFeedForward
+from mlp_utils.layers import FeedForward, NGPT
 
-
-ngpt_ffn = nGPTFeedForward(
+# 1. Create a standard feed-forward network
+feedforward_net = FeedForward(
     dim=256,
     mult=4,
     glu_variant="swiglu",
 )
 
+# 2. Wrap it with the NGPT layer
+ngpt_feedforward = NGPT(
+    feedforward_net=feedforward_net,
+    dim=256,
+)
+
+# The resulting module can be used as a drop-in replacement for a standard feedforward
+```
+
+#### FastFeedForward
+
+The `FastFeedForward` class implements the Fast Feedforward Network from the paper "Fast Feedforward Networks" by Belcak and Wattenhofer. This layer uses a tree of routers to dynamically select a small subset of "expert" `FeedForward` networks for each input token, enabling conditional computation.
+
+This architecture achieves logarithmic time complexity with respect to the number of experts, leading to significant efficiency gains while preserving a high degree of predictive performance.
+
+```python
+from mlp_utils.layers import FastFeedForward
+
+# Create a FastFeedForward layer with a tree of depth 3 (2^3 = 8 experts)
+fff = FastFeedForward(
+    dim=256,
+    depth=3,
+    mult=4,
+    glu_variant="swiglu",
+)
 ```
 
 #### Gating

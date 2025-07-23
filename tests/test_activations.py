@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from mlp_utils.activations import (
@@ -8,12 +7,12 @@ from mlp_utils.activations import (
     ReluNelu,
     ReluSquared,
     StraightThroughEstimator,
-    gelu2,
-    sugar_relu,
+    Gelu2,
+    SugarReLU,
 )
 
 
-def test_relu_squared_unsigned():
+def test_relu_squared_unsigned() -> None:
     activation = ReluSquared()
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     expected_output = torch.tensor([0.0, 0.0, 0.0, 1.0, 4.0])
@@ -21,7 +20,7 @@ def test_relu_squared_unsigned():
     assert torch.allclose(output_tensor, expected_output)
 
 
-def test_relu_squared_signed():
+def test_relu_squared_signed() -> None:
     activation = ReluSquared(signed=True)
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     expected_output = torch.tensor([-0.0, -0.0, 0.0, 1.0, 4.0])
@@ -29,15 +28,15 @@ def test_relu_squared_signed():
     assert torch.allclose(output_tensor, expected_output)
 
 
-def test_gelu2():
-    activation = gelu2()
+def test_gelu2() -> None:
+    activation = Gelu2()
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     expected_output = F.gelu(input_tensor).pow(2)
     output_tensor = activation(input_tensor)
     assert torch.allclose(output_tensor, expected_output)
 
 
-def test_bsilu():
+def test_bsilu() -> None:
     activation = BSiLU()
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     alpha = 1.67
@@ -46,7 +45,7 @@ def test_bsilu():
     assert torch.allclose(output_tensor, expected_output)
 
 
-def test_nelu():
+def test_nelu() -> None:
     alpha = 0.05
     activation = NeLU(alpha=alpha)
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
@@ -55,7 +54,7 @@ def test_nelu():
     assert torch.allclose(output_tensor, expected_output)
 
 
-def test_straight_through_estimator():
+def test_straight_through_estimator() -> None:
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0], requires_grad=True)
     ste = StraightThroughEstimator(F.relu, torch.sigmoid)
     output = ste(input_tensor)
@@ -73,7 +72,7 @@ def test_straight_through_estimator():
     assert torch.allclose(input_tensor.grad, grad_of_sigmoid)
 
 
-def test_relu_nelu():
+def test_relu_nelu() -> None:
     alpha = 0.05
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0], requires_grad=True)
     activation = ReluNelu(alpha=alpha)
@@ -91,9 +90,9 @@ def test_relu_nelu():
     assert torch.allclose(input_tensor.grad, expected_grad)
 
 
-def test_sugar_relu():
+def test_sugar_relu() -> None:
     input_tensor = torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0], requires_grad=True)
-    activation = sugar_relu()
+    activation = SugarReLU()
     output = activation(input_tensor)
     assert torch.allclose(output, F.relu(input_tensor))
     output.sum().backward()

@@ -1,12 +1,12 @@
+"""Implements Gated Linear Units (GLU) and Masked Gated Linear Units (MGLU)."""
 
 import torch
+
 from torch import nn
 
 
-
 class _GLUBase(nn.Module):
-    """
-    Base class for Gated Linear Units.
+    """Base class for Gated Linear Units.
 
     This class implements the core logic of a GLU, which consists of a projection
     followed by a gated activation. The specific activation function is provided
@@ -25,8 +25,7 @@ class _GLUBase(nn.Module):
         self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass for the GLU.
+        """Forward pass for the GLU.
 
         Args:
             x (torch.Tensor): The input tensor.
@@ -74,8 +73,7 @@ class GeGLU(_GLUBase):
 
 
 class _MGLUBase(nn.Module):
-    """
-    Base class for Masked Gated Linear Units.
+    """Base class for Masked Gated Linear Units.
 
     This class implements the core logic of a MGLU, which uses a single
     shared weight matrix for the gate and value projections, with a learnable
@@ -101,8 +99,7 @@ class _MGLUBase(nn.Module):
         self.mask = nn.Parameter(torch.randn(dim_out))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass for the MGLU.
+        """Forward pass for the MGLU.
 
         Args:
             x (torch.Tensor): The input tensor.
@@ -113,8 +110,10 @@ class _MGLUBase(nn.Module):
         projected = self.proj(x)
 
         # Binarize the mask using a straight-through estimator.
-        # Use .detach() to prevent gradient flow through the binarization.
-        binary_mask = torch.ge(self.mask, 0).to(projected.dtype).detach()
+        # The hard binarization is used in the forward pass, but gradients
+        # are allowed to flow back to the original mask parameter.
+        binary_mask_hard = torch.ge(self.mask, 0).to(projected.dtype)
+        binary_mask = (binary_mask_hard - self.mask).detach() + self.mask
 
         # Ensure mask is broadcastable to projected's shape.
         mask_view = (1,) * (projected.dim() - 1) + (-1,)
@@ -126,7 +125,7 @@ class _MGLUBase(nn.Module):
         gated_out = projected * self.activation(projected)
 
         # Combine the gated and non-gated parts using the mask.
-        return projected * (1 - binary_mask) + gated_out * binary_mask
+        return torch.where(binary_mask.to(torch.bool), gated_out, projected)
 
 
 class MGLU(_MGLUBase):
@@ -162,4 +161,3 @@ class GeMGLU(_MGLUBase):
 
     def __init__(self, dim_in: int, dim_out: int, bias: bool = True) -> None:
         super().__init__(dim_in, dim_out, nn.GELU(), bias=bias)
-

@@ -1,3 +1,5 @@
+"""Implements a residual wrapper for any module."""
+
 import torch
 
 from torch import nn

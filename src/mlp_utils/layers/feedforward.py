@@ -1,9 +1,23 @@
+"""Implements a feed-forward block with optional gated variants."""
+
 from typing import Literal
 
 import torch
 
 from torch import nn
 
+from .glu import (
+    GLU,
+    MGLU,
+    Bilinear,
+    BilinearMGLU,
+    GeGLU,
+    GeMGLU,
+    ReGLU,
+    ReMGLU,
+    SwiGLU,
+    SwiMGLU,
+)
 from .init_weights import initialize_weights
 
 
@@ -19,13 +33,22 @@ class FeedForward(nn.Module):
     dropout : float, default 0.0
         Dropout probability applied *after* the gate.
     activation : nn.Module, default nn.GELU
-        Activation used for the **value** branch in `'geglu'` mode and inside the
-        vanilla MLP path. Ignored for `'swiglu'`.
-    glu_variant : Literal["none","glu","geglu","swiglu"], default "none"
-        • **"none"** - conventional two-layer MLP
-        • **"glu"** - classic GLU: _value·σ(gate)_
-        • **"geglu"** - GeGLU: _GELU(value)·gate_
-        • **"swiglu"** - SwiGLU: _SiLU(value)·gate_
+        Activation used for the vanilla MLP path. Ignored for GLU variants.
+    glu_variant : Literal[
+        "none", "glu", "geglu", "swiglu", "reglu", "bilinear",
+        "mglu", "mgeglu", "mswiglu", "mreglu", "mbilinear"
+        ], default "none"
+        - **"none"** - conventional two-layer MLP
+        - **"glu"** - classic GLU: _value·σ(gate)_
+        - **"geglu"** - GeGLU: _value·GELU(gate)_
+        - **"swiglu"** - SwiGLU: _value·SiLU(gate)_
+        - **"reglu"** - ReGLU: _value·ReLU(gate)_
+        - **"bilinear"** - Bilinear: _value·gate_
+        - **"mglu"** - Masked GLU with Sigmoid
+        - **"mgeglu"** - Masked GLU with GELU
+        - **"mswiglu"** - Masked GLU with SiLU
+        - **"mreglu"** - Masked GLU with ReLU
+        - **"mbilinear"** - Masked Bilinear (Identity activation)
     pre_norm : bool, default False
         If ``True`` a normalization layer (``norm_layer``) is applied *before*
         the projections.
@@ -39,7 +62,19 @@ class FeedForward(nn.Module):
         mult: int = 4,
         dropout: float = 0.0,
         activation: type[nn.Module] = nn.GELU,
-        glu_variant: Literal["none", "glu", "geglu", "swiglu"] = "none",
+        glu_variant: Literal[
+            "none",
+            "glu",
+            "geglu",
+            "swiglu",
+            "reglu",
+            "bilinear",
+            "mglu",
+            "mgeglu",
+            "mswiglu",
+            "mreglu",
+            "mbilinear",
+        ] = "none",
         pre_norm: bool = False,
         norm_layer: type[nn.Module] = nn.RMSNorm,
     ) -> None:
@@ -48,30 +83,36 @@ class FeedForward(nn.Module):
         hidden_dim: int = int(dim * mult)
         self.glu_variant = glu_variant.lower()
         self.pre_norm = norm_layer(dim) if pre_norm else None
-        self.dropout = nn.Dropout(dropout)
 
-        self.net = nn.Sequential()
         if self.glu_variant != "none":
-            self.proj_in = nn.Linear(dim, hidden_dim * 2)
-            self.proj_out = nn.Linear(hidden_dim, dim)
-
-            if self.glu_variant == "glu":  # value · σ(gate)
-                self.value_act: nn.Module = nn.Identity()
-                self.gate_act: nn.Module = nn.Sigmoid()
-
-            elif self.glu_variant == "geglu":  # GELU(value) · gate
-                self.value_act = activation()
-                self.gate_act = nn.Identity()
-
-            elif self.glu_variant == "swiglu":  # SiLU(value) · gate
-                self.value_act = nn.SiLU()
-                self.gate_act = nn.Identity()
-
-            else:
+            glu_map = {
+                "glu": GLU,
+                "geglu": GeGLU,
+                "swiglu": SwiGLU,
+                "reglu": ReGLU,
+                "bilinear": Bilinear,
+                "mglu": MGLU,
+                "mgeglu": GeMGLU,
+                "mswiglu": SwiMGLU,
+                "mreglu": ReMGLU,
+                "mbilinear": BilinearMGLU,
+            }
+            glu_class = glu_map.get(self.glu_variant)
+            if glu_class is None:
                 raise ValueError(f"Unknown GLU variant: {self.glu_variant}")
 
-            initialize_weights(self.proj_in, init_method="default")
-            initialize_weights(self.proj_out, init_method="default", scale=0.1)
+            glu_layer = glu_class(dim, hidden_dim)
+            output_proj = nn.Linear(hidden_dim, dim)
+
+            initialize_weights(glu_layer.proj, init_method="default")
+            initialize_weights(output_proj, init_method="default", scale=0.1)
+
+            self.net = nn.Sequential(
+                glu_layer,
+                nn.Dropout(dropout),
+                output_proj,
+            )
+
         else:
             self.net = nn.Sequential(
                 nn.Linear(dim, hidden_dim),
@@ -98,11 +139,5 @@ class FeedForward(nn.Module):
         """
         if self.pre_norm is not None:
             x = self.pre_norm(x)
-
-        if self.glu_variant != "none":
-            value, gate = self.proj_in(x).chunk(2, dim=-1)
-            x = self.value_act(value) * self.gate_act(gate)
-            x = self.dropout(x)
-            return self.proj_out(x)
 
         return self.net(x)

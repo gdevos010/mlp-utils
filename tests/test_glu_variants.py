@@ -1,15 +1,15 @@
-
 import pytest
 import torch
+
 from torch import nn
 
 from mlp_utils.layers.glu import (
+    GLU,
+    MGLU,
     Bilinear,
     BilinearMGLU,
     GeGLU,
     GeMGLU,
-    GLU,
-    MGLU,
     ReGLU,
     ReMGLU,
     SwiGLU,
@@ -18,7 +18,7 @@ from mlp_utils.layers.glu import (
 
 
 @pytest.mark.parametrize(
-    "glu_class, activation",
+    ("glu_class", "activation"),
     [
         (GLU, nn.Sigmoid),
         (Bilinear, nn.Identity),
@@ -48,7 +48,7 @@ def test_glu_variants(glu_class, activation) -> None:
 
 
 @pytest.mark.parametrize(
-    "mglu_class, activation",
+    ("mglu_class", "activation"),
     [
         (MGLU, nn.Sigmoid),
         (BilinearMGLU, nn.Identity),
@@ -78,4 +78,4 @@ def test_mglu_variants(mglu_class, activation) -> None:
     # test with no bias
     mglu_no_bias = mglu_class(dim_in, dim_out, bias=False)
     output_no_bias = mglu_no_bias(x)
-    assert output_no_bias.shape == (batch_size, dim_out) 
+    assert output_no_bias.shape == (batch_size, dim_out)
