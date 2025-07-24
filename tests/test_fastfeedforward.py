@@ -11,11 +11,46 @@ def test_fastfeedforward_initialization() -> None:
         mult=4,
         glu_variant="swiglu",
     )
+    fff = torch.compile(fff)
     assert fff is not None, "FastFeedForward layer should be initialized."
     assert fff.depth == 3, "Depth should be set correctly."
     assert fff.num_experts == 8, "Number of experts should be 2**depth."
     assert len(fff.routers) == 7, "Number of routers should be 2**depth - 1."
     assert len(fff.experts) == 8, "Number of experts should be correct."
+
+
+def test_feedforward_initialization_with_proj() -> None:
+    """Tests if the FeedForward layer has the proj attribute."""
+    ff = FastFeedForward(dim=256, depth=3, mult=4, glu_variant="swiglu").experts[0]
+    assert hasattr(ff, "proj"), "FeedForward layer should have a proj attribute."
+
+
+def test_fastfeedforward_forward_pass_expert_dim() -> None:
+    """Tests the forward pass of the FastFeedForward layer with expert dim."""
+    batch_size = 4
+    seq_len = 16
+    dim = 256
+    expert_dim = 128
+
+    fff = FastFeedForward(
+        dim=dim,
+        expert_dim=expert_dim,
+        depth=3,
+        mult=4,
+        glu_variant="swiglu",
+    )
+    fff = torch.compile(fff)
+
+    # Create a random input tensor
+    x = torch.randn(batch_size, seq_len, dim)
+
+    # Perform the forward pass
+    output = fff(x)
+
+    # Check if the output shape is correct
+    assert output.shape == x.shape, (
+        f"Expected output shape {x.shape}, but got {output.shape}"
+    )
 
 
 def test_fastfeedforward_forward_pass() -> None:
@@ -30,7 +65,7 @@ def test_fastfeedforward_forward_pass() -> None:
         mult=4,
         glu_variant="swiglu",
     )
-
+    fff = torch.compile(fff)
     # Create a random input tensor
     x = torch.randn(batch_size, seq_len, dim)
 
@@ -38,9 +73,9 @@ def test_fastfeedforward_forward_pass() -> None:
     output = fff(x)
 
     # Check if the output shape is correct
-    assert (
-        output.shape == x.shape
-    ), f"Expected output shape {x.shape}, but got {output.shape}"
+    assert output.shape == x.shape, (
+        f"Expected output shape {x.shape}, but got {output.shape}"
+    )
 
 
 def test_fastfeedforward_forward_pass_pre_norm() -> None:
@@ -56,7 +91,7 @@ def test_fastfeedforward_forward_pass_pre_norm() -> None:
         glu_variant="swiglu",
         pre_norm=True,
     )
-
+    fff = torch.compile(fff)
     # Create a random input tensor
     x = torch.randn(batch_size, seq_len, dim)
 
@@ -64,9 +99,9 @@ def test_fastfeedforward_forward_pass_pre_norm() -> None:
     output = fff(x)
 
     # Check if the output shape is correct
-    assert (
-        output.shape == x.shape
-    ), f"Expected output shape {x.shape}, but got {output.shape}"
+    assert output.shape == x.shape, (
+        f"Expected output shape {x.shape}, but got {output.shape}"
+    )
 
 
 def test_fastfeedforward_eval_mode() -> None:
@@ -82,13 +117,14 @@ def test_fastfeedforward_eval_mode() -> None:
         glu_variant="swiglu",
     )
     fff.eval()  # Switch to evaluation mode to test hard routing
-
+    fff = torch.compile(fff)
     x = torch.randn(batch_size, seq_len, dim)
     output = fff(x)
 
     assert (
         output.shape == x.shape
     ), f"Expected output shape {x.shape}, but got {output.shape}"
+
 
 
 def test_fastfeedforward_soft_routing_grad() -> None:
@@ -105,7 +141,7 @@ def test_fastfeedforward_soft_routing_grad() -> None:
         soft_routing_during_train=True,
     )
     fff.train()  # Ensure training mode
-
+    fff = torch.compile(fff)
     x = torch.randn(batch_size, seq_len, dim)
     output = fff(x)
     loss = output.mean()
@@ -140,7 +176,7 @@ def test_fastfeedforward_hard_routing_grad() -> None:
         soft_routing_during_train=False,  # Use hard routing
     )
     fff.train()
-
+    fff = torch.compile(fff)    
     x = torch.randn(1, 1, dim)  # Single token
     output = fff(x)
     loss = output.mean()

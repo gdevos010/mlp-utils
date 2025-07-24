@@ -3,11 +3,11 @@ import torch.nn.functional as F
 
 from mlp_utils.activations import (
     BSiLU,
+    Gelu2,
     NeLU,
     ReluNelu,
     ReluSquared,
     StraightThroughEstimator,
-    Gelu2,
     SugarReLU,
 )
 

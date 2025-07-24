@@ -112,7 +112,7 @@ class FeedForward(nn.Module):
                 nn.Dropout(dropout),
                 output_proj,
             )
-
+            self.proj = glu_layer.proj
         else:
             self.net = nn.Sequential(
                 nn.Linear(dim, hidden_dim),
@@ -127,6 +127,7 @@ class FeedForward(nn.Module):
                         initialize_weights(module, init_method="default", scale=0.1)
                     else:
                         initialize_weights(module, init_method="default")
+            self.proj = self.net[0]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.

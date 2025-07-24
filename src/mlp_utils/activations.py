@@ -103,12 +103,15 @@ class StraightThroughEstimator(nn.Module):
         return soft + (hard - soft).detach()
 
 
-def ReluNelu(alpha: float = 0.05) -> Sugar:
+class ReluNelu(Sugar):
     """An activation that uses ReLU in the forward pass and NeLU in the backward pass for the negative part.
 
     This was found to be effective in transformer models.
     """
-    return Sugar(nn.ReLU(), NeLU(alpha))
+
+    def __init__(self, alpha: float = 0.05) -> None:
+        """Initializes the ReluNelu activation."""
+        super().__init__(nn.ReLU(), NeLU(alpha))
 
 
 class SugarReLU(StraightThroughEstimator):

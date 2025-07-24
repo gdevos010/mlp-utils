@@ -1,3 +1,5 @@
+"""A PyTorch implementation of gMLP."""
+
 import torch
 
 from einops import rearrange
@@ -16,10 +18,12 @@ class SpatialGatingUnit(nn.Module):
         seq_len (int): The length of the input sequence.
     """
 
-    def __init__(self, dim, seq_len) -> None:
+    def __init__(self, dim: int, seq_len: int) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(dim)
-        self.proj = nn.Linear(seq_len, seq_len, bias=False)
+        self.proj = nn.Linear(seq_len, seq_len)
+        nn.init.zeros_(self.proj.weight)
+        nn.init.ones_(self.proj.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for the SpatialGatingUnit."""
@@ -45,15 +49,16 @@ class GMLPBlock(nn.Module):
         seq_len (int): The length of the input sequence.
     """
 
-    def __init__(self, dim, dim_ff, seq_len) -> None:
+    def __init__(self, dim: int, dim_ff: int, seq_len: int) -> None:
         super().__init__()
-        self.proj_in = nn.Linear(dim, dim_ff * 2, bias=False)
+        self.proj_in = nn.Linear(dim, dim_ff * 2)
         self.activation = nn.GELU()
 
         self.sgu = SpatialGatingUnit(dim_ff, seq_len)
         self.proj_out = nn.Linear(dim_ff, dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass for the GMLPBlock."""
         u, v = self.proj_in(x).chunk(2, dim=-1)
         u = self.activation(u)
         v = self.sgu(v)
@@ -76,13 +81,20 @@ class GMLP(nn.Module):
         depth (int): The number of gMLP blocks to stack.
     """
 
-    def __init__(self, dim, dim_ff, seq_len, depth) -> None:
+    def __init__(self, dim: int, dim_ff: int, seq_len: int, depth: int) -> None:
         super().__init__()
         self.blocks = nn.ModuleList(
-            [GMLPBlock(dim=dim, dim_ff=dim_ff, seq_len=seq_len) for _ in range(depth)]
+            [
+                nn.Sequential(
+                    nn.LayerNorm(dim),
+                    GMLPBlock(dim=dim, dim_ff=dim_ff, seq_len=seq_len),
+                )
+                for _ in range(depth)
+            ]
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass for the GMLP model."""
         for block in self.blocks:
-            x = block(x)
+            x = block(x) + x
         return x

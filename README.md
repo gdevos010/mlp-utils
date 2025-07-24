@@ -52,14 +52,29 @@ ffn = FeedForward(
 
 #### NGPT
 
-The `NGPT` class is a wrapper that implements the feed-forward block from the paper "nGPT: Normalized Transformer with Representation Learning on the Hypersphere."
+The `NGPT` class implements the feed-forward block from the paper ["nGPT: Normalized Transformer with Representation Learning on the Hypersphere."](https://arxiv.org/html/2410.01131v2).
 
-This module takes a standard `FeedForward` network and applies the nGPT update rule, which involves normalizing the hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere.
+This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere. By default, it uses a `SwiGLU` feed-forward network with weight-normalized linear layers (`NormLinear`), making it a self-contained implementation of the nGPT MLP block.
+
+You can use it as a standalone layer:
+
+```python
+from mlp_utils.layers import NGPT
+
+# Initialize the nGPT feed-forward block
+ngpt_feedforward = NGPT(
+    dim=256,
+)
+
+# The resulting module can be used as a drop-in replacement for a standard feedforward
+```
+
+Alternatively, you can provide your own feed-forward network, which will be wrapped with the nGPT update rule:
 
 ```python
 from mlp_utils.layers import FeedForward, NGPT
 
-# 1. Create a standard feed-forward network
+# 1. Create a custom feed-forward network
 feedforward_net = FeedForward(
     dim=256,
     mult=4,
@@ -67,12 +82,10 @@ feedforward_net = FeedForward(
 )
 
 # 2. Wrap it with the NGPT layer
-ngpt_feedforward = NGPT(
+ngpt_feedforward_wrapped = NGPT(
     feedforward_net=feedforward_net,
     dim=256,
 )
-
-# The resulting module can be used as a drop-in replacement for a standard feedforward
 ```
 
 #### FastFeedForward

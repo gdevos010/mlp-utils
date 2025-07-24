@@ -27,7 +27,7 @@ class GatingMechanism(nn.Module):
 
         Args:
             input_dim: Input dimension
-            output_dim:
+            output_dim: Output dimension
             bottleneck_factor: Factor to reduce dimension in bottleneck (bottleneck_dim = input_dim * bottleneck_factor). Recommended value is 0.5
             bottleneck_dim: Explicit bottleneck dimension, overrides bottleneck_factor if provided
             dropout: Dropout probability

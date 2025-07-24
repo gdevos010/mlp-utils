@@ -1,3 +1,5 @@
+"""A PyTorch implementation of a fast feedforward network."""
+
 from typing import Literal
 
 import torch
@@ -25,6 +27,8 @@ class FastFeedForward(nn.Module):
     ----------
     dim : int
         Input and output dimension.
+    expert_dim : int
+        Dimension of the expert networks.
     depth : int
         Depth of the routing tree.
     num_experts : int
@@ -36,6 +40,8 @@ class FastFeedForward(nn.Module):
         Input and output dimension of the layer.
     depth : int
         Depth of the routing tree. The number of experts will be 2**depth.
+    expert_dim : int, optional
+        Dimension of the expert networks. If not provided, it is set to `dim`.
     mult : int, default 4
         Expansion factor for the hidden layer of each expert FeedForward network.
     dropout : float, default 0.0
@@ -56,6 +62,7 @@ class FastFeedForward(nn.Module):
         self,
         dim: int,
         depth: int,
+        expert_dim: int | None = None,
         mult: int = 4,
         dropout: float = 0.0,
         activation: type[nn.Module] = nn.GELU,
@@ -81,9 +88,17 @@ class FastFeedForward(nn.Module):
             raise ValueError("Tree depth must be at least 1.")
 
         self.dim = dim
+        self.expert_dim = expert_dim if expert_dim is not None else dim
         self.depth = depth
         self.num_experts = 2**depth
         self.soft_routing_during_train = soft_routing_during_train
+
+        if self.dim != self.expert_dim:
+            self.project_in = nn.Linear(self.dim, self.expert_dim)
+            self.project_out = nn.Linear(self.expert_dim, self.dim)
+        else:
+            self.project_in = nn.Identity()
+            self.project_out = nn.Identity()
 
         # Routers: one for each internal node of the binary tree
         # Total internal nodes = 2**depth - 1
@@ -94,7 +109,7 @@ class FastFeedForward(nn.Module):
         self.experts = nn.ModuleList(
             [
                 FeedForward(
-                    dim=dim,
+                    dim=self.expert_dim,
                     mult=mult,
                     dropout=dropout,
                     activation=activation,
@@ -120,10 +135,7 @@ class FastFeedForward(nn.Module):
         return self._hard_routing_forward(x)
 
     def _soft_routing_forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass using soft, differentiable routing. Used for training.
-        Each token's output is a weighted average of all experts' outputs.
-        """
+        """Forward pass using soft, differentiable routing. Used for training. Each token's output is a weighted average of all experts' outputs."""
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
         num_tokens = flat_x.shape[0]
@@ -161,19 +173,18 @@ class FastFeedForward(nn.Module):
 
         # --- Expert Computation ---
         # Get output from all experts for all tokens.
+        projected_x = self.project_in(flat_x)
         all_expert_outputs = torch.stack(
-            [expert(flat_x) for expert in self.experts], dim=1
+            [expert(projected_x) for expert in self.experts], dim=1
         )
 
         # Weight expert outputs by the calculated probabilities and sum them up.
         output = torch.einsum("nep,ne->np", all_expert_outputs, leaf_probs)
+        output = self.project_out(output)
         return output.reshape(batch_size, seq_len, dim)
 
     def _hard_routing_forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass using hard, non-differentiable routing. Used for inference.
-        Each token is processed by a single expert.
-        """
+        """Forward pass using hard, non-differentiable routing. Used for inference. Each token is processed by a single expert."""
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
         num_tokens = flat_x.shape[0]
@@ -219,15 +230,46 @@ class FastFeedForward(nn.Module):
 
         # --- Expert Computation ---
         # `leaf_indices` now holds the final expert index for each token.
-        # We process tokens in batches based on their assigned expert.
-        output = torch.zeros_like(flat_x)
-        for i in range(self.num_experts):
-            expert_mask = leaf_indices == i
-            if not expert_mask.any():
-                continue
 
-            expert_tokens = flat_x[expert_mask]
-            expert_output = self.experts[i](expert_tokens)
-            output[expert_mask] = expert_output
+        # Stack weights for batched matrix multiplication
+        # The SwiGLU layer combines w1 and w2 into a single projection
+        w1_w2 = torch.stack([expert.net[0].proj.weight for expert in self.experts])
+        b1_b2 = torch.stack([expert.net[0].proj.bias for expert in self.experts])
+        # The final projection layer is the third element in the sequential module
+        w3 = torch.stack([expert.net[2].weight for expert in self.experts])
+        b3 = torch.stack([expert.net[2].bias for expert in self.experts])
 
+        # Sort tokens by expert index to improve memory access patterns.
+        sorted_indices = torch.argsort(leaf_indices)
+        restore_indices = torch.argsort(sorted_indices)
+
+        projected_x = self.project_in(flat_x)
+        sorted_x = projected_x[sorted_indices]
+        sorted_leaf_indices = leaf_indices[sorted_indices]
+
+        # Gather the appropriate expert weights for each token.
+        w1_w2_per_token = w1_w2[sorted_leaf_indices]
+        b1_b2_per_token = b1_b2[sorted_leaf_indices]
+        w3_per_token = w3[sorted_leaf_indices]
+        b3_per_token = b3[sorted_leaf_indices]
+
+        # Batched FeedForward (SwiGLU) logic for each token.
+        # Unsqueeze sorted_x for batched matrix multiplication (bmm).
+        hidden_and_gated = torch.bmm(
+            sorted_x.unsqueeze(1), w1_w2_per_token.transpose(1, 2)
+        ).squeeze(1)
+        hidden_and_gated = hidden_and_gated + b1_b2_per_token
+
+        hidden_states, gated_states = hidden_and_gated.chunk(2, dim=-1)
+        activated_states = torch.nn.functional.silu(hidden_states) * gated_states
+
+        output_states = torch.bmm(
+            activated_states.unsqueeze(1), w3_per_token.transpose(1, 2)
+        ).squeeze(1)
+        output_states = output_states + b3_per_token
+
+        # Un-sort to restore original token order
+        unsorted_output = output_states[restore_indices]
+
+        output = self.project_out(unsorted_output)
         return output.reshape(batch_size, seq_len, dim)
