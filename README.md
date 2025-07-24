@@ -106,6 +106,23 @@ fff = FastFeedForward(
 )
 ```
 
+#### PathWeightedFFF
+
+The `PathWeightedFFF` class implements a hierarchical, path-dependent neural network that uses a binary tree structure. Unlike a Mixture-of-Experts (MoE) model that routes an input to a single expert, this network computes its output by combining transformations from *every* node along the traversed path.
+
+The routing logits themselves are activated with GELU and used as weights to combine the transformations, allowing the model to learn hierarchical features in a path-dependent manner. This offers a different architectural trade-off compared to sparse MoE layers like `FastFeedForward`.
+
+```python
+from mlp_utils.layers import PathWeightedFFF
+
+# Create a PathWeightedFFF layer with a tree of depth 4
+pfff = PathWeightedFFF(
+    input_width=256,
+    depth=4,
+    output_width=256,
+)
+```
+
 #### SwitchFFN
 
 The `SwitchFFN` layer implements the Switch Transformer feed-forward layer from the paper ["Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity"](https://arxiv.org/abs/2101.03961).
@@ -316,5 +333,14 @@ gmlp = GMLP(
       archivePrefix={arXiv},
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2405.16836}, 
+}
+```
+
+```bibtex
+@misc{belcak2023exponentiallyfasterlanguagemodelling,
+      title={Exponentially Faster Language Modelling}, 
+      author={Peter Belcak and Roger Wattenhofer},
+      year={2023},
+      url={https://arxiv.org/abs/2311.10770}, 
 }
 ```

@@ -143,9 +143,7 @@ class FastFeedForward(nn.Module):
 
         if not isinstance(first_expert.net[0], SwiGLU):
             return False
-        if not isinstance(first_expert.net[2], nn.Linear):
-            return False
-        return True
+        return isinstance(first_expert.net[2], nn.Linear)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for the FastFeedForward layer.
@@ -280,8 +278,7 @@ class FastFeedForward(nn.Module):
         return output.reshape(batch_size, seq_len, dim)
 
     def _fast_swiglu_hard_routing(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Optimized hard routing for SwiGLU experts.
+        """Optimized hard routing for SwiGLU experts.
         Each token is processed by a single expert.
         """
         batch_size, seq_len, dim = x.shape

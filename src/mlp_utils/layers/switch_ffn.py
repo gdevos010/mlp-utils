@@ -6,10 +6,9 @@ by William Fedus, Barret Zoph, Noam Shazeer.
 https://arxiv.org/abs/2101.03961
 """
 
-from typing import Any
-
 import torch
 import torch.nn.functional as F
+
 from torch import nn
 
 from .feedforward import FeedForward
@@ -66,9 +65,7 @@ class SwitchFFN(nn.Module):
             [FeedForward(dim=dim, **_ff_kwargs) for _ in range(num_experts)]
         )
 
-    def forward(
-        self, x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass for the Switch FFN layer.
 
         Args:
@@ -85,9 +82,7 @@ class SwitchFFN(nn.Module):
 
         # 1. Get router logits and probabilities
         router_logits = self.router(x)
-        router_probs = F.softmax(
-            router_logits, dim=-1, dtype=torch.float32
-        ).to(x.dtype)
+        router_probs = F.softmax(router_logits, dim=-1, dtype=torch.float32).to(x.dtype)
 
         # 2. For each token, get the top-1 expert and its gating weight
         gating_weights, expert_indices = torch.max(router_probs, dim=-1)
@@ -123,9 +118,7 @@ class SwitchFFN(nn.Module):
             if token_indices.numel() > 0:
                 tokens_for_expert = x[token_indices]
                 expert_output = expert_ffn(tokens_for_expert)
-                weighted_output = (
-                    expert_output * gating_weights[token_indices, None]
-                )
+                weighted_output = expert_output * gating_weights[token_indices, None]
                 final_output.index_add_(0, token_indices, weighted_output)
 
         # 8. For dropped tokens, use the original input (identity function)
@@ -133,4 +126,4 @@ class SwitchFFN(nn.Module):
         final_output[dropped_mask] = x[dropped_mask]
 
         final_output = final_output.view(batch_size, seq_len, dim)
-        return final_output, load_balancing_loss 
+        return final_output, load_balancing_loss

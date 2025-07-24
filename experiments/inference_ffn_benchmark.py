@@ -10,6 +10,7 @@ from torch import nn
 
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
+from mlp_utils.layers.pathweightedfff import PathWeightedFFF
 
 
 def benchmark_model(
@@ -25,12 +26,7 @@ def benchmark_model(
 
     # Warm-up run
     with torch.no_grad():
-        output = model(x)
-        # Handle tuple output for models with aux loss
-        if isinstance(output, tuple):
-            _ = output[0]
-        else:
-            _ = output
+        _ = model(x)
 
     # For GPU experiments, synchronize before starting the timer
     if x.is_cuda:
@@ -39,11 +35,7 @@ def benchmark_model(
     start_time = time.perf_counter()
     with torch.no_grad():
         for _ in range(num_runs):
-            output = model(x)
-            if isinstance(output, tuple):
-                _ = output[0]
-            else:
-                _ = output
+            _ = model(x)
     # For GPU experiments, synchronize before stopping the timer
     if x.is_cuda:
         torch.cuda.synchronize()
@@ -63,7 +55,9 @@ def get_model_size(model: nn.Module) -> str:
 
 def run_benchmark(device: str, console: Console) -> None:
     """Runs the benchmark on a specific device and prints the results."""
-    console.print(f"\n[bold green]--- Running Benchmark on {device.upper()} ---[/bold green]")
+    console.print(
+        f"\n[bold green]--- Running Benchmark on {device.upper()} ---[/bold green]"
+    )
 
     # --- Configuration ---
     # Using larger dimensions to make the performance difference more apparent.
@@ -92,7 +86,6 @@ def run_benchmark(device: str, console: Console) -> None:
         depth=depth,
         glu_variant="swiglu",
         expert_dim=dim // 4,
-        has_master_leaf=False,  # Baseline without master leaf
     ).to(device)
 
     fff_geglu_model = FastFeedForward(
@@ -100,22 +93,17 @@ def run_benchmark(device: str, console: Console) -> None:
         depth=depth,
         glu_variant="geglu",
         expert_dim=dim // 4,
-        has_master_leaf=False,  # Baseline without master leaf
     ).to(device)
 
-    fff_with_master_leaf = FastFeedForward(
-        dim=dim,
-        depth=depth,
-        glu_variant="swiglu",
-        expert_dim=dim // 4,
-        has_master_leaf=True,
+    pathweighted_fff_model = PathWeightedFFF(
+        input_width=dim, depth=depth, output_width=dim
     ).to(device)
 
     ff_model = FeedForward(dim=dim, glu_variant="swiglu", mult=4).to(device)
 
     fff_swiglu_model = torch.compile(fff_swiglu_model)
     fff_geglu_model = torch.compile(fff_geglu_model)
-    fff_with_master_leaf = torch.compile(fff_with_master_leaf)
+    pathweighted_fff_model = torch.compile(pathweighted_fff_model)
     ff_model = torch.compile(ff_model)
 
     # --- Benchmarking ---
@@ -148,20 +136,7 @@ def run_benchmark(device: str, console: Console) -> None:
         }
     )
 
-    # 3. FastFeedForward with Master Leaf (Hard Routing - Inference)
-    fff_master_leaf_time = benchmark_model(fff_with_master_leaf, x, num_runs)
-    fff_master_leaf_size = get_model_size(fff_with_master_leaf)
-    results.append(
-        {
-            "Model": "FFF (SwiGLU) + Master Leaf",
-            "Size": fff_master_leaf_size,
-            "Mode": "Hard Routing (eval)",
-            "Avg. Time (ms)": f"{fff_master_leaf_time:.4f}",
-            "Notes": "Inference with master leaf enabled",
-        }
-    )
-
-    # 4. FastFeedForward (Soft Routing - Training Mode)
+    # 3. FastFeedForward (Soft Routing - Training Mode)
     # We manually set the model to `train` mode to force soft routing.
     fff_swiglu_model.train()
     # The benchmark function will still use torch.no_grad to be comparable.
@@ -178,7 +153,7 @@ def run_benchmark(device: str, console: Console) -> None:
         }
     )
 
-    # 5. FastFeedForward with GeGLU (Generic Path)
+    # 4. FastFeedForward with GeGLU (Generic Path)
     fff_geglu_hard_time = benchmark_model(fff_geglu_model, x, num_runs)
     fff_size = get_model_size(fff_geglu_model)
     results.append(
@@ -188,6 +163,19 @@ def run_benchmark(device: str, console: Console) -> None:
             "Mode": "Hard Routing (eval)",
             "Avg. Time (ms)": f"{fff_geglu_hard_time:.4f}",
             "Notes": "Generic path for non-swiglu experts",
+        }
+    )
+
+    # 5. PathWeightedFFF
+    pathweighted_time = benchmark_model(pathweighted_fff_model, x, num_runs)
+    pathweighted_size = get_model_size(pathweighted_fff_model)
+    results.append(
+        {
+            "Model": "PathWeightedFFF",
+            "Size": pathweighted_size,
+            "Mode": "Inference (eval)",
+            "Avg. Time (ms)": f"{pathweighted_time:.4f}",
+            "Notes": "Path-weighted combination, not MoE",
         }
     )
 

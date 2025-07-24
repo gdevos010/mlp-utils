@@ -9,12 +9,12 @@ from rich.logging import RichHandler
 from rich.table import Table
 from torch import nn
 
-from mlp_utils.activations import BSiLU, Gelu2, ReluNelu, ReluSquared
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.gmlp import GMLP
 from mlp_utils.layers.mlp import MLP
 from mlp_utils.layers.ngpt import NGPT
+from mlp_utils.layers.pathweightedfff import PathWeightedFFF
 from mlp_utils.layers.switch_ffn import SwitchFFN
 
 
@@ -53,6 +53,8 @@ def get_model(config: dict) -> nn.Module:
         return FastFeedForward(
             dim=dim, depth=3, mult=4, glu_variant=config["glu_variant"]
         )
+    if model_name == "pathweightedfff":
+        return PathWeightedFFF(input_width=dim, depth=config["depth"], output_width=dim)
     if model_name == "ngpt":
         ff_net = FeedForward(dim=dim, mult=4, glu_variant="swiglu")
         return NGPT(
@@ -190,69 +192,66 @@ def main() -> None:
 
     configurations = [
         # MLP variants
-        {"model_name": "mlp", "act_fn": nn.GELU},
-        {"model_name": "mlp", "act_fn": nn.ReLU},
-        {"model_name": "mlp", "act_fn": nn.SiLU},
-        {"model_name": "mlp", "act_fn": ReluSquared},
-        {"model_name": "mlp", "act_fn": Gelu2},
-        {"model_name": "mlp", "act_fn": BSiLU},
-        {"model_name": "mlp", "act_fn": ReluNelu()},
-        # MLP parameter variants
-        {"model_name": "mlp", "act_fn": nn.GELU, "residual": True},
-        {"model_name": "mlp", "act_fn": nn.GELU, "use_norm": False},
-        {"model_name": "mlp", "act_fn": nn.GELU, "pre_norm": True},
-        # FeedForward variants (vanilla)
-        {"model_name": "feedforward", "glu_variant": "none", "activation": nn.GELU},
-        # FeedForward variants (GLU)
-        {"model_name": "feedforward", "glu_variant": "glu"},
-        {"model_name": "feedforward", "glu_variant": "swiglu"},
-        {"model_name": "feedforward", "glu_variant": "geglu"},
-        {"model_name": "feedforward", "glu_variant": "reglu"},
-        {"model_name": "feedforward", "glu_variant": "bilinear"},
-        # FeedForward variants (Masked GLU)
-        {"model_name": "feedforward", "glu_variant": "mglu"},
-        {"model_name": "feedforward", "glu_variant": "mswiglu"},
-        {"model_name": "feedforward", "glu_variant": "mgeglu"},
-        {"model_name": "feedforward", "glu_variant": "mreglu"},
-        {"model_name": "feedforward", "glu_variant": "mbilinear"},
-        # FastFeedForward variants
-        {
-            "model_name": "fastfeedforward",
-            "glu_variant": "swiglu",
-            "expert_dim": base_config["dim"] // 8,
-        },
-        {
-            "model_name": "fastfeedforward",
-            "glu_variant": "geglu",
-            "expert_dim": base_config["dim"] // 8,
-        },
-        {
-            "model_name": "fastfeedforward",
-            "glu_variant": "mswiglu",
-            "expert_dim": base_config["dim"] // 8,
-        },
-        # FastFeedForward with load balancing and master leaf
-        {
-            "model_name": "fastfeedforward",
-            "glu_variant": "swiglu",
-            "expert_dim": base_config["dim"] // 8,
-            # "load_balancing_alpha": 1e-2,
-            # "has_master_leaf": False,
-        },
-        {
-            "model_name": "fastfeedforward",
-            "glu_variant": "swiglu",
-            "expert_dim": base_config["dim"] // 8,
-            # "load_balancing_alpha": 0.0,
-            # "has_master_leaf": True,
-        },
-        {
-            "model_name": "fastfeedforward",
-            "glu_variant": "swiglu",
-            "expert_dim": base_config["dim"] // 8,
-            # "load_balancing_alpha": 1e-2,
-            # "has_master_leaf": True,
-        },
+        # {"model_name": "mlp", "act_fn": nn.GELU},
+        # {"model_name": "mlp", "act_fn": nn.ReLU},
+        # {"model_name": "mlp", "act_fn": nn.SiLU},
+        # {"model_name": "mlp", "act_fn": ReluSquared},
+        # {"model_name": "mlp", "act_fn": Gelu2},
+        # {"model_name": "mlp", "act_fn": BSiLU},
+        # {"model_name": "mlp", "act_fn": ReluNelu()},
+        # # MLP parameter variants
+        # {"model_name": "mlp", "act_fn": nn.GELU, "residual": True},
+        # {"model_name": "mlp", "act_fn": nn.GELU, "use_norm": False},
+        # {"model_name": "mlp", "act_fn": nn.GELU, "pre_norm": True},
+        # # FeedForward variants (vanilla)
+        # {"model_name": "feedforward", "glu_variant": "none", "activation": nn.GELU},
+        # # FeedForward variants (GLU)
+        # {"model_name": "feedforward", "glu_variant": "glu"},
+        # {"model_name": "feedforward", "glu_variant": "swiglu"},
+        # {"model_name": "feedforward", "glu_variant": "geglu"},
+        # {"model_name": "feedforward", "glu_variant": "reglu"},
+        # {"model_name": "feedforward", "glu_variant": "bilinear"},
+        # # FeedForward variants (Masked GLU)
+        # {"model_name": "feedforward", "glu_variant": "mglu"},
+        # {"model_name": "feedforward", "glu_variant": "mswiglu"},
+        # {"model_name": "feedforward", "glu_variant": "mgeglu"},
+        # {"model_name": "feedforward", "glu_variant": "mreglu"},
+        # {"model_name": "feedforward", "glu_variant": "mbilinear"},
+        # # FastFeedForward variants
+        # {
+        #     "model_name": "fastfeedforward",
+        #     "glu_variant": "swiglu",
+        #     "expert_dim": base_config["dim"] // 8,
+        # },
+        # {
+        #     "model_name": "fastfeedforward",
+        #     "glu_variant": "geglu",
+        #     "expert_dim": base_config["dim"] // 8,
+        # },
+        # {
+        #     "model_name": "fastfeedforward",
+        #     "glu_variant": "mswiglu",
+        #     "expert_dim": base_config["dim"] // 8,
+        # },
+        # # FastFeedForward with load balancing and master leaf
+        # {
+        #     "model_name": "fastfeedforward",
+        #     "glu_variant": "swiglu",
+        #     "expert_dim": base_config["dim"] // 8,
+        # },
+        # {
+        #     "model_name": "fastfeedforward",
+        #     "glu_variant": "swiglu",
+        #     "expert_dim": base_config["dim"] // 8,
+        # },
+        # {
+        #     "model_name": "fastfeedforward",
+        #     "glu_variant": "swiglu",
+        #     "expert_dim": base_config["dim"] // 8,
+        # },
+        # PathWeightedFFF variants
+        {"model_name": "pathweightedfff", "depth": 3},
+        {"model_name": "pathweightedfff", "depth": 5},
         # nGPT variants
         {"model_name": "ngpt", "scalar_alpha": True},
         {"model_name": "ngpt", "scalar_alpha": False},

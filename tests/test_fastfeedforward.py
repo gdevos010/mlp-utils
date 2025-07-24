@@ -121,9 +121,9 @@ def test_fastfeedforward_eval_mode() -> None:
     x = torch.randn(batch_size, seq_len, dim)
     output = fff(x)
 
-    assert (
-        output.shape == x.shape
-    ), f"Expected output shape {x.shape}, but got {output.shape}"
+    assert output.shape == x.shape, (
+        f"Expected output shape {x.shape}, but got {output.shape}"
+    )
 
 
 def test_fastfeedforward_generic_hard_routing_path() -> None:
@@ -141,16 +141,14 @@ def test_fastfeedforward_generic_hard_routing_path() -> None:
     )
     fff.eval()
     fff = torch.compile(fff)
-    assert (
-        not fff._is_swiglu_fast_path_compatible
-    ), "Should not use fast path for GeGLU"
+    assert not fff._is_swiglu_fast_path_compatible, "Should not use fast path for GeGLU"
 
     x = torch.randn(batch_size, seq_len, dim)
     output = fff(x)
 
-    assert (
-        output.shape == x.shape
-    ), f"Expected output shape {x.shape}, but got {output.shape}"
+    assert output.shape == x.shape, (
+        f"Expected output shape {x.shape}, but got {output.shape}"
+    )
 
 
 def test_fastfeedforward_soft_routing_grad() -> None:
@@ -181,14 +179,13 @@ def test_fastfeedforward_soft_routing_grad() -> None:
     # Check that all experts have gradients
     for expert in fff.experts:
         for param in expert.parameters():
-            assert (
-                param.grad is not None
-            ), "All expert parameters should have gradients in soft routing."
+            assert param.grad is not None, (
+                "All expert parameters should have gradients in soft routing."
+            )
 
 
 def test_fastfeedforward_hard_routing_grad() -> None:
-    """
-    Tests gradient flow in hard routing (when soft_routing_during_train=False).
+    """Tests gradient flow in hard routing (when soft_routing_during_train=False).
     With hard routing, router parameters should not receive gradients.
     """
     dim = 32
@@ -202,7 +199,7 @@ def test_fastfeedforward_hard_routing_grad() -> None:
         soft_routing_during_train=False,  # Use hard routing
     )
     fff.train()
-    fff = torch.compile(fff)    
+    fff = torch.compile(fff)
     x = torch.randn(1, 1, dim)  # Single token
     output = fff(x)
     loss = output.mean()
@@ -213,15 +210,15 @@ def test_fastfeedforward_hard_routing_grad() -> None:
     for router in fff.routers:
         if router.weight.grad is not None:
             num_router_grads += 1
-    assert (
-        num_router_grads == 0
-    ), f"Expected 0 routers to have gradients with hard routing, but got {num_router_grads}."
+    assert num_router_grads == 0, (
+        f"Expected 0 routers to have gradients with hard routing, but got {num_router_grads}."
+    )
 
     # Check expert gradients
     num_expert_grads = 0
     for expert in fff.experts:
         if all(p.grad is not None for p in expert.parameters()):
             num_expert_grads += 1
-    assert (
-        num_expert_grads == 1
-    ), f"Expected 1 expert to have gradients, but got {num_expert_grads}." 
+    assert num_expert_grads == 1, (
+        f"Expected 1 expert to have gradients, but got {num_expert_grads}."
+    )

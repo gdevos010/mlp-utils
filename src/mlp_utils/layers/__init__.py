@@ -16,5 +16,6 @@ from .glu import (
 from .gmlp import GMLP
 from .mlp import MLP
 from .ngpt import NGPT
+from .pathweightedfff import PathWeightedFFF
 from .residual import ResidualWrapper
 from .switch_ffn import SwitchFFN

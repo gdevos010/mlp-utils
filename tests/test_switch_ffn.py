@@ -1,7 +1,7 @@
-import torch
 import pytest
+import torch
 
-from mlp_utils.layers import SwitchFFN, FeedForward
+from mlp_utils.layers import FeedForward, SwitchFFN
 
 
 @pytest.fixture
@@ -110,4 +110,4 @@ def test_switch_ffn_varying_experts(num_experts):
     x = torch.randn(4, 16, dim)
     output, loss = model(x)
     assert output.shape == x.shape
-    assert loss.ndim == 0 
+    assert loss.ndim == 0
