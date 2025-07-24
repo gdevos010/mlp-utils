@@ -15,6 +15,7 @@ from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.gmlp import GMLP
 from mlp_utils.layers.mlp import MLP
 from mlp_utils.layers.ngpt import NGPT
+from mlp_utils.layers.switch_ffn import SwitchFFN
 
 
 def get_synthetic_data(batch_size, seq_len, dim):
@@ -59,6 +60,12 @@ def get_model(config: dict) -> nn.Module:
         )
     if model_name == "gmlp":
         return GMLP(dim=dim, dim_ff=dim * 4, seq_len=seq_len, depth=4)
+    if model_name == "switch_ffn":
+        return SwitchFFN(
+            dim=dim,
+            num_experts=config["num_experts"],
+            ff_kwargs=config["ff_kwargs"],
+        )
     raise ValueError(f"Unknown model: {model_name}")
 
 
@@ -108,7 +115,12 @@ def train(model: nn.Module, model_config: dict, use_compile: bool) -> float:
         if getattr(model, "needs_normalized_target", False):
             y_true = F.normalize(y_true, p=2, dim=-1)
 
-        loss = loss_fn(y_pred, y_true)
+        # Handle models with auxiliary loss (e.g., SwitchFFN)
+        if getattr(model, "has_aux_loss", False):
+            y_pred, aux_loss = y_pred
+            loss = loss_fn(y_pred, y_true) + aux_loss
+        else:
+            loss = loss_fn(y_pred, y_true)
 
         optimizer.zero_grad()
         loss.backward()
@@ -219,11 +231,44 @@ def main() -> None:
             "glu_variant": "mswiglu",
             "expert_dim": base_config["dim"] // 8,
         },
+        # FastFeedForward with load balancing and master leaf
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+            # "load_balancing_alpha": 1e-2,
+            # "has_master_leaf": False,
+        },
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+            # "load_balancing_alpha": 0.0,
+            # "has_master_leaf": True,
+        },
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+            # "load_balancing_alpha": 1e-2,
+            # "has_master_leaf": True,
+        },
         # nGPT variants
         {"model_name": "ngpt", "scalar_alpha": True},
         {"model_name": "ngpt", "scalar_alpha": False},
         # gMLP
         {"model_name": "gmlp"},
+        # SwitchFFN variants
+        {
+            "model_name": "switch_ffn",
+            "num_experts": 8,
+            "ff_kwargs": {"mult": 4, "glu_variant": "swiglu"},
+        },
+        {
+            "model_name": "switch_ffn",
+            "num_experts": 16,
+            "ff_kwargs": {"mult": 2, "glu_variant": "geglu"},
+        },
     ]
 
     results = []

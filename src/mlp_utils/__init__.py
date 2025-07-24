@@ -27,11 +27,13 @@ from .layers.glu import (
 )
 from .layers.mlp import MLP
 from .layers.ngpt import L2Norm
+from .layers.switch_ffn import SwitchFFN
 from torch.nn import GELU, ReLU, Sigmoid, SiLU
 
 __all__ = [
     "MLP",
     "FastFeedForward",
+    "SwitchFFN",
     "GatingMechanism",
     "L2Norm",
     "GMLP",

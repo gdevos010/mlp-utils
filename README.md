@@ -106,6 +106,27 @@ fff = FastFeedForward(
 )
 ```
 
+#### SwitchFFN
+
+The `SwitchFFN` layer implements the Switch Transformer feed-forward layer from the paper ["Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity"](https://arxiv.org/abs/2101.03961).
+
+This layer uses a Mixture-of-Experts (MoE) approach, where a router network dynamically sends each input token to one of several "expert" `FeedForward` networks. This allows for a massive number of parameters while keeping the computational cost per token constant. The layer also includes an auxiliary load-balancing loss to encourage experts to be utilized evenly.
+
+```python
+from mlp_utils.layers import SwitchFFN
+
+# Create a SwitchFFN layer with 8 experts
+switch_ffn = SwitchFFN(
+    dim=256,
+    num_experts=8,
+    capacity_factor=1.25,
+    ff_kwargs=dict(mult=4, glu_variant="swiglu"),
+)
+
+# The forward pass returns the output and the load-balancing loss
+output, loss = switch_ffn(input_tensor)
+```
+
 #### Gating
 
 A standardized gating mechanism.
@@ -271,5 +292,29 @@ gmlp = GMLP(
       author={Peter Belcak and Roger Wattenhofer},
       year={2023},
       url={https://arxiv.org/abs/2308.14711}, 
+}
+```
+
+```bibtex
+@misc{fedus2022switchtransformersscalingtrillion,
+      title={Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity}, 
+      author={William Fedus and Barret Zoph and Noam Shazeer},
+      year={2022},
+      eprint={2101.03961},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2101.03961}, 
+}
+```
+
+```bibtex
+@misc{charalampopoulos2024enhancingfastfeedforward,
+      title={Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node}, 
+      author={Andreas Charalampopoulos and Nikolas Chatzis and Foivos Ntoulas-Panagiotopoulos and Charilaos Papaioannou and Alexandros Potamianos},
+      year={2024},
+      eprint={2405.16836},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2405.16836}, 
 }
 ```

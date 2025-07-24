@@ -25,7 +25,12 @@ def benchmark_model(
 
     # Warm-up run
     with torch.no_grad():
-        _ = model(x)
+        output = model(x)
+        # Handle tuple output for models with aux loss
+        if isinstance(output, tuple):
+            _ = output[0]
+        else:
+            _ = output
 
     # For GPU experiments, synchronize before starting the timer
     if x.is_cuda:
@@ -34,7 +39,11 @@ def benchmark_model(
     start_time = time.perf_counter()
     with torch.no_grad():
         for _ in range(num_runs):
-            _ = model(x)
+            output = model(x)
+            if isinstance(output, tuple):
+                _ = output[0]
+            else:
+                _ = output
     # For GPU experiments, synchronize before stopping the timer
     if x.is_cuda:
         torch.cuda.synchronize()
@@ -83,6 +92,7 @@ def run_benchmark(device: str, console: Console) -> None:
         depth=depth,
         glu_variant="swiglu",
         expert_dim=dim // 4,
+        has_master_leaf=False,  # Baseline without master leaf
     ).to(device)
 
     fff_geglu_model = FastFeedForward(
@@ -90,12 +100,22 @@ def run_benchmark(device: str, console: Console) -> None:
         depth=depth,
         glu_variant="geglu",
         expert_dim=dim // 4,
+        has_master_leaf=False,  # Baseline without master leaf
+    ).to(device)
+
+    fff_with_master_leaf = FastFeedForward(
+        dim=dim,
+        depth=depth,
+        glu_variant="swiglu",
+        expert_dim=dim // 4,
+        has_master_leaf=True,
     ).to(device)
 
     ff_model = FeedForward(dim=dim, glu_variant="swiglu", mult=4).to(device)
 
     fff_swiglu_model = torch.compile(fff_swiglu_model)
     fff_geglu_model = torch.compile(fff_geglu_model)
+    fff_with_master_leaf = torch.compile(fff_with_master_leaf)
     ff_model = torch.compile(ff_model)
 
     # --- Benchmarking ---
@@ -128,7 +148,20 @@ def run_benchmark(device: str, console: Console) -> None:
         }
     )
 
-    # 3. FastFeedForward (Soft Routing - Training Mode)
+    # 3. FastFeedForward with Master Leaf (Hard Routing - Inference)
+    fff_master_leaf_time = benchmark_model(fff_with_master_leaf, x, num_runs)
+    fff_master_leaf_size = get_model_size(fff_with_master_leaf)
+    results.append(
+        {
+            "Model": "FFF (SwiGLU) + Master Leaf",
+            "Size": fff_master_leaf_size,
+            "Mode": "Hard Routing (eval)",
+            "Avg. Time (ms)": f"{fff_master_leaf_time:.4f}",
+            "Notes": "Inference with master leaf enabled",
+        }
+    )
+
+    # 4. FastFeedForward (Soft Routing - Training Mode)
     # We manually set the model to `train` mode to force soft routing.
     fff_swiglu_model.train()
     # The benchmark function will still use torch.no_grad to be comparable.
@@ -145,7 +178,7 @@ def run_benchmark(device: str, console: Console) -> None:
         }
     )
 
-    # 4. FastFeedForward with GeGLU (Generic Path)
+    # 5. FastFeedForward with GeGLU (Generic Path)
     fff_geglu_hard_time = benchmark_model(fff_geglu_model, x, num_runs)
     fff_size = get_model_size(fff_geglu_model)
     results.append(

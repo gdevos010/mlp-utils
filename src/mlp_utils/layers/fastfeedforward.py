@@ -209,6 +209,33 @@ class FastFeedForward(nn.Module):
         output = self.project_out(output)
         return output.reshape(batch_size, seq_len, dim)
 
+    def _get_expert_indices(self, flat_x: torch.Tensor) -> torch.Tensor:
+        """Determines which expert each token is routed to by traversing the tree."""
+        num_tokens = flat_x.shape[0]
+        leaf_indices = torch.zeros(num_tokens, dtype=torch.long, device=flat_x.device)
+
+        for d in range(self.depth):
+            router_offset = 2**d - 1
+            num_routers_at_level = 2**d
+            level_routers = self.routers[
+                router_offset : router_offset + num_routers_at_level
+            ]
+
+            w = torch.cat([r.weight for r in level_routers], dim=0)
+            b = torch.cat([r.bias for r in level_routers], dim=0)
+
+            routing_logits = torch.einsum("nd, rd -> nr", flat_x, w) + b
+
+            current_node_indices = leaf_indices.unsqueeze(1)
+            selected_logits = torch.gather(
+                routing_logits, 1, current_node_indices
+            ).squeeze(1)
+
+            decision = (selected_logits > 0).long()
+            leaf_indices = leaf_indices * 2 + decision
+
+        return leaf_indices
+
     def _hard_routing_forward(self, x: torch.Tensor) -> torch.Tensor:
         """Dispatch to the appropriate hard routing implementation."""
         if self._is_swiglu_fast_path_compatible:
@@ -219,25 +246,9 @@ class FastFeedForward(nn.Module):
         """Generic hard routing that works with any expert type."""
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
-        num_tokens = flat_x.shape[0]
 
         # --- Routing ---
-        leaf_indices = torch.zeros(num_tokens, dtype=torch.long, device=x.device)
-        for d in range(self.depth):
-            router_offset = 2**d - 1
-            num_routers_at_level = 2**d
-            level_routers = self.routers[
-                router_offset : router_offset + num_routers_at_level
-            ]
-            w = torch.cat([r.weight for r in level_routers], dim=0)
-            b = torch.cat([r.bias for r in level_routers], dim=0)
-            routing_logits = torch.einsum("nd, rd -> nr", flat_x, w) + b
-            current_node_indices = leaf_indices.unsqueeze(1)
-            selected_logits = torch.gather(
-                routing_logits, 1, current_node_indices
-            ).squeeze(1)
-            decision = (selected_logits > 0).long()
-            leaf_indices = leaf_indices * 2 + decision
+        leaf_indices = self._get_expert_indices(flat_x)
 
         # --- Expert Computation ---
         projected_x = self.project_in(flat_x)
@@ -275,46 +286,9 @@ class FastFeedForward(nn.Module):
         """
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
-        num_tokens = flat_x.shape[0]
 
         # --- Routing ---
-        # Determine the expert index for each token by traversing the tree.
-        # `leaf_indices` will store the chosen expert for each token.
-        leaf_indices = torch.zeros(num_tokens, dtype=torch.long, device=x.device)
-
-        for d in range(self.depth):
-            # The decision at each level refines the path.
-            # `router_offset` is the index of the first router at the current depth.
-            router_offset = 2**d - 1
-            # `num_routers_at_level` is the number of routers at this depth.
-            num_routers_at_level = 2**d
-
-            # Stack the weights and biases of all routers at the current level
-            # for efficient batch processing.
-            level_routers = self.routers[
-                router_offset : router_offset + num_routers_at_level
-            ]
-            w = torch.cat([r.weight for r in level_routers], dim=0)
-            b = torch.cat([r.bias for r in level_routers], dim=0)
-
-            # Get routing logits for each token against each router at this level.
-            # Shape: (num_tokens, num_routers_at_level)
-            routing_logits = torch.einsum("nd, rd -> nr", flat_x, w) + b
-
-            # For each token, select the logit from the router corresponding to
-            # its current path in the tree (`leaf_indices`).
-            # `gather` selects the appropriate logit for each token.
-            current_node_indices = leaf_indices.unsqueeze(1)
-            selected_logits = torch.gather(
-                routing_logits, 1, current_node_indices
-            ).squeeze(1)
-
-            # Make a binary decision (go right if > 0, left if <= 0).
-            decision = (selected_logits > 0).long()
-
-            # Update leaf_indices to reflect the path taken.
-            # If at node `i`, the children are `2*i` and `2*i + 1`.
-            leaf_indices = leaf_indices * 2 + decision
+        leaf_indices = self._get_expert_indices(flat_x)
 
         # --- Expert Computation ---
         # `leaf_indices` now holds the final expert index for each token.
