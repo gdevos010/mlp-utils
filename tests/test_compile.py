@@ -71,7 +71,7 @@ class TestCompiledModules:
         "activation_class",
         [ReluSquared, Gelu2, BSiLU, NeLU, SugarReLU, ReluNelu],
     )
-    def test_activations_compile(self, activation_class):
+    def test_activations_compile(self, activation_class) -> None:
         """Verify that basic activation functions can be compiled."""
         model = activation_class()
         compiled_model = torch.compile(model)
@@ -80,7 +80,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_straight_through_estimator_compile(self):
+    def test_straight_through_estimator_compile(self) -> None:
         """Verify that the StraightThroughEstimator can be compiled."""
         model = StraightThroughEstimator(nn.ReLU(), nn.Sigmoid())
         compiled_model = torch.compile(model)
@@ -89,7 +89,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_sugar_compile(self):
+    def test_sugar_compile(self) -> None:
         """Verify that the Sugar STE variant can be compiled."""
         model = Sugar(nn.ReLU(), NeLU())
         compiled_model = torch.compile(model)
@@ -102,7 +102,7 @@ class TestCompiledModules:
         "glu_class",
         [GLU, Bilinear, ReGLU, SwiGLU, GeGLU],
     )
-    def test_glu_variants_compile(self, glu_class):
+    def test_glu_variants_compile(self, glu_class) -> None:
         """Verify that all GLU variants can be compiled."""
         dim_in, dim_out = 16, 32
         model = glu_class(dim_in, dim_out)
@@ -116,7 +116,7 @@ class TestCompiledModules:
         "mglu_class",
         [MGLU, BilinearMGLU, ReMGLU, SwiMGLU, GeMGLU],
     )
-    def test_mglu_variants_compile(self, mglu_class):
+    def test_mglu_variants_compile(self, mglu_class) -> None:
         """Verify that all MGLU variants can be compiled."""
         dim_in, dim_out = 16, 32
         model = mglu_class(dim_in, dim_out)
@@ -127,7 +127,7 @@ class TestCompiledModules:
         assert output.shape == (4, dim_out)
 
     @pytest.mark.parametrize("glu_variant", ALL_GLU_VARIANTS)
-    def test_feedforward_compile(self, glu_variant):
+    def test_feedforward_compile(self, glu_variant) -> None:
         """Verify that FeedForward with all GLU variants can be compiled."""
         dim = 16
         model = FeedForward(dim=dim, mult=2, glu_variant=glu_variant)
@@ -137,7 +137,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_fastfeedforward_compile(self):
+    def test_fastfeedforward_compile(self) -> None:
         """Verify that FastFeedForward can be compiled in both training and eval modes."""
         dim, depth = 32, 3
         # The hard routing (eval) path is currently optimized specifically for SwiGLU.
@@ -159,7 +159,7 @@ class TestCompiledModules:
         assert output_eval is not None
         assert output_eval.shape == input_tensor.shape
 
-    def test_gating_mechanism_compile(self):
+    def test_gating_mechanism_compile(self) -> None:
         """Verify that GatingMechanism can be compiled."""
         dim = 20
         model = GatingMechanism(input_dim=dim, bottleneck_factor=0.5)
@@ -169,7 +169,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_gmlp_compile(self):
+    def test_gmlp_compile(self) -> None:
         """Verify that GMLP can be compiled."""
         dim, seq_len, depth = 32, 16, 2
         model = GMLP(dim=dim, dim_ff=dim * 2, seq_len=seq_len, depth=depth)
@@ -179,7 +179,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_mlp_compile(self):
+    def test_mlp_compile(self) -> None:
         """Verify that MLP can be compiled."""
         dim = 64
         model = MLP(input_dim=dim, output_dim=dim, hidden_factor=2)
@@ -189,7 +189,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_ngpt_compile(self):
+    def test_ngpt_compile(self) -> None:
         """Verify that NGPT can be compiled."""
         dim, depth = 32, 2
         fff = FastFeedForward(dim=dim, depth=depth)
@@ -201,7 +201,7 @@ class TestCompiledModules:
         assert output is not None
         assert output.shape == input_tensor.shape
 
-    def test_residual_wrapper_compile(self):
+    def test_residual_wrapper_compile(self) -> None:
         """Verify that ResidualWrapper can be compiled."""
         dim = 16
         simple_module = SimpleModule(dim)

@@ -92,6 +92,7 @@ class FastFeedForward(nn.Module):
         self.depth = depth
         self.num_experts = 2**depth
         self.soft_routing_during_train = soft_routing_during_train
+        self.glu_variant = glu_variant
 
         if self.dim != self.expert_dim:
             self.project_in = nn.Linear(self.dim, self.expert_dim)
@@ -120,6 +121,31 @@ class FastFeedForward(nn.Module):
                 for _ in range(self.num_experts)
             ]
         )
+
+        self._is_swiglu_fast_path_compatible = self._check_swiglu_compatibility()
+
+    def _check_swiglu_compatibility(self) -> bool:
+        """Check if the experts are compatible with the fast SwiGLU path."""
+        if self.glu_variant != "swiglu":
+            return False
+
+        first_expert = self.experts[0]
+        if not isinstance(first_expert, FeedForward):
+            return False
+        if not hasattr(first_expert, "net") or not isinstance(
+            first_expert.net, nn.Sequential
+        ):
+            return False
+        if len(first_expert.net) < 3:
+            return False
+
+        from .glu import SwiGLU
+
+        if not isinstance(first_expert.net[0], SwiGLU):
+            return False
+        if not isinstance(first_expert.net[2], nn.Linear):
+            return False
+        return True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for the FastFeedForward layer.
@@ -184,7 +210,69 @@ class FastFeedForward(nn.Module):
         return output.reshape(batch_size, seq_len, dim)
 
     def _hard_routing_forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass using hard, non-differentiable routing. Used for inference. Each token is processed by a single expert."""
+        """Dispatch to the appropriate hard routing implementation."""
+        if self._is_swiglu_fast_path_compatible:
+            return self._fast_swiglu_hard_routing(x)
+        return self._generic_hard_routing(x)
+
+    def _generic_hard_routing(self, x: torch.Tensor) -> torch.Tensor:
+        """Generic hard routing that works with any expert type."""
+        batch_size, seq_len, dim = x.shape
+        flat_x = x.reshape(batch_size * seq_len, dim)
+        num_tokens = flat_x.shape[0]
+
+        # --- Routing ---
+        leaf_indices = torch.zeros(num_tokens, dtype=torch.long, device=x.device)
+        for d in range(self.depth):
+            router_offset = 2**d - 1
+            num_routers_at_level = 2**d
+            level_routers = self.routers[
+                router_offset : router_offset + num_routers_at_level
+            ]
+            w = torch.cat([r.weight for r in level_routers], dim=0)
+            b = torch.cat([r.bias for r in level_routers], dim=0)
+            routing_logits = torch.einsum("nd, rd -> nr", flat_x, w) + b
+            current_node_indices = leaf_indices.unsqueeze(1)
+            selected_logits = torch.gather(
+                routing_logits, 1, current_node_indices
+            ).squeeze(1)
+            decision = (selected_logits > 0).long()
+            leaf_indices = leaf_indices * 2 + decision
+
+        # --- Expert Computation ---
+        projected_x = self.project_in(flat_x)
+        sorted_indices = torch.argsort(leaf_indices)
+        restore_indices = torch.argsort(sorted_indices)
+
+        sorted_x = projected_x[sorted_indices]
+        sorted_leaf_indices = leaf_indices[sorted_indices]
+
+        output_chunks = []
+        counts = torch.bincount(sorted_leaf_indices, minlength=self.num_experts)
+        start_idx = 0
+        for i, count in enumerate(counts):
+            if count == 0:
+                continue
+            end_idx = start_idx + count
+            expert_input = sorted_x[start_idx:end_idx]
+            expert_output = self.experts[i](expert_input)
+            output_chunks.append(expert_output)
+            start_idx = end_idx
+
+        if output_chunks:
+            output_states = torch.cat(output_chunks, dim=0)
+        else:
+            output_states = torch.empty_like(sorted_x)
+
+        unsorted_output = output_states[restore_indices]
+        output = self.project_out(unsorted_output)
+        return output.reshape(batch_size, seq_len, dim)
+
+    def _fast_swiglu_hard_routing(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Optimized hard routing for SwiGLU experts.
+        Each token is processed by a single expert.
+        """
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
         num_tokens = flat_x.shape[0]

@@ -78,16 +78,24 @@ def run_benchmark(device: str, console: Console) -> None:
     # --- Data and Models ---
     x = torch.randn(batch_size, seq_len, dim).to(device)
 
-    fff_model = FastFeedForward(
+    fff_swiglu_model = FastFeedForward(
         dim=dim,
         depth=depth,
         glu_variant="swiglu",
         expert_dim=dim // 4,
-        soft_routing_during_train=True,
     ).to(device)
+
+    fff_geglu_model = FastFeedForward(
+        dim=dim,
+        depth=depth,
+        glu_variant="geglu",
+        expert_dim=dim // 4,
+    ).to(device)
+
     ff_model = FeedForward(dim=dim, glu_variant="swiglu", mult=4).to(device)
 
-    fff_model = torch.compile(fff_model)
+    fff_swiglu_model = torch.compile(fff_swiglu_model)
+    fff_geglu_model = torch.compile(fff_geglu_model)
     ff_model = torch.compile(ff_model)
 
     # --- Benchmarking ---
@@ -108,30 +116,45 @@ def run_benchmark(device: str, console: Console) -> None:
 
     # 2. FastFeedForward (Hard Routing - Inference Mode)
     # The `benchmark_model` function puts the model in `eval` mode automatically.
-    fff_hard_time = benchmark_model(fff_model, x, num_runs)
-    fff_size = get_model_size(fff_model)
+    fff_swiglu_hard_time = benchmark_model(fff_swiglu_model, x, num_runs)
+    fff_size = get_model_size(fff_swiglu_model)
     results.append(
         {
-            "Model": "FastFeedForward",
+            "Model": "FastFeedForward (SwiGLU)",
             "Size": fff_size,
             "Mode": "Hard Routing (eval)",
-            "Avg. Time (ms)": f"{fff_hard_time:.4f}",
-            "Notes": "The 'fast' part: single expert per token",
+            "Avg. Time (ms)": f"{fff_swiglu_hard_time:.4f}",
+            "Notes": "Optimized fast path for swiglu",
         }
     )
 
     # 3. FastFeedForward (Soft Routing - Training Mode)
     # We manually set the model to `train` mode to force soft routing.
-    fff_model.train()
+    fff_swiglu_model.train()
     # The benchmark function will still use torch.no_grad to be comparable.
-    fff_soft_time = benchmark_model(fff_model, x, num_runs, set_eval_mode=False)
+    fff_swiglu_soft_time = benchmark_model(
+        fff_swiglu_model, x, num_runs, set_eval_mode=False
+    )
     results.append(
         {
-            "Model": "FastFeedForward",
+            "Model": "FastFeedForward (SwiGLU)",
             "Size": fff_size,
             "Mode": "Soft Routing (train)",
-            "Avg. Time (ms)": f"{fff_soft_time:.4f}",
+            "Avg. Time (ms)": f"{fff_swiglu_soft_time:.4f}",
             "Notes": "Used for training, processes ALL experts",
+        }
+    )
+
+    # 4. FastFeedForward with GeGLU (Generic Path)
+    fff_geglu_hard_time = benchmark_model(fff_geglu_model, x, num_runs)
+    fff_size = get_model_size(fff_geglu_model)
+    results.append(
+        {
+            "Model": "FastFeedForward (GeGLU)",
+            "Size": fff_size,
+            "Mode": "Hard Routing (eval)",
+            "Avg. Time (ms)": f"{fff_geglu_hard_time:.4f}",
+            "Notes": "Generic path for non-swiglu experts",
         }
     )
 
@@ -149,8 +172,8 @@ def run_benchmark(device: str, console: Console) -> None:
     console.print(table)
 
     console.print(f"\n[bold]Conclusion for {device.upper()}:[/bold]")
-    if fff_hard_time > 0 and fff_soft_time > fff_hard_time:
-        speedup_factor = fff_soft_time / fff_hard_time
+    if fff_swiglu_hard_time > 0 and fff_swiglu_soft_time > fff_swiglu_hard_time:
+        speedup_factor = fff_swiglu_soft_time / fff_swiglu_hard_time
         console.print(
             f"FastFeedForward in inference mode (hard routing) is "
             f"[bold magenta]{speedup_factor:.2f}x[/bold magenta] faster than "

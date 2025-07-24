@@ -201,7 +201,7 @@ gmlp = GMLP(
 
 #### Normalization
 
-- `UnitNorm`: Normalizes a tensor to have a unit L2 norm along a given dimension.
+- `L2Norm`: Normalizes a tensor to have a unit L2 norm along a given dimension.
 
 #### Residual
 

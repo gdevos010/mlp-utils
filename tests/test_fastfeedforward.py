@@ -126,6 +126,32 @@ def test_fastfeedforward_eval_mode() -> None:
     ), f"Expected output shape {x.shape}, but got {output.shape}"
 
 
+def test_fastfeedforward_generic_hard_routing_path() -> None:
+    """Tests that the generic hard routing path is used for non-SwiGLU experts."""
+    batch_size = 4
+    seq_len = 16
+    dim = 256
+
+    # Use a different GLU variant to trigger the generic path
+    fff = FastFeedForward(
+        dim=dim,
+        depth=3,
+        mult=4,
+        glu_variant="geglu",  # Not swiglu
+    )
+    fff.eval()
+    fff = torch.compile(fff)
+    assert (
+        not fff._is_swiglu_fast_path_compatible
+    ), "Should not use fast path for GeGLU"
+
+    x = torch.randn(batch_size, seq_len, dim)
+    output = fff(x)
+
+    assert (
+        output.shape == x.shape
+    ), f"Expected output shape {x.shape}, but got {output.shape}"
+
 
 def test_fastfeedforward_soft_routing_grad() -> None:
     """Tests if gradients flow through the soft routing mechanism."""

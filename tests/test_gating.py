@@ -11,7 +11,7 @@ def input_tensor():
     return torch.randn(10, 20)
 
 
-def test_gating_mechanism_bottleneck_factor(input_tensor):
+def test_gating_mechanism_bottleneck_factor(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_factor=0.5)
     output = gate(input_tensor)
     assert output.shape == (10, 20)
@@ -19,19 +19,19 @@ def test_gating_mechanism_bottleneck_factor(input_tensor):
     assert output.max() <= 1
 
 
-def test_gating_mechanism_bottleneck_dim(input_tensor):
+def test_gating_mechanism_bottleneck_dim(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=15)
     output = gate(input_tensor)
     assert output.shape == (10, 20)
 
 
-def test_gating_mechanism_output_dim(input_tensor):
+def test_gating_mechanism_output_dim(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=10, output_dim=5)
     output = gate(input_tensor)
     assert output.shape == (10, 5)
 
 
-def test_gating_mechanism_pre_norm(input_tensor):
+def test_gating_mechanism_pre_norm(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=10, pre_norm=True)
     # Check if the first layer is a norm layer
     assert isinstance(gate.gate[0], nn.modules.normalization.RMSNorm)
@@ -39,7 +39,7 @@ def test_gating_mechanism_pre_norm(input_tensor):
     assert output.shape == (10, 20)
 
 
-def test_gating_mechanism_no_norm(input_tensor):
+def test_gating_mechanism_no_norm(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=10, use_norm=False)
     # Check that no norm layers are present
     assert not any(isinstance(m, nn.modules.normalization.RMSNorm) for m in gate.gate)
@@ -47,7 +47,7 @@ def test_gating_mechanism_no_norm(input_tensor):
     assert output.shape == (10, 20)
 
 
-def test_gating_mechanism_no_sigmoid(input_tensor):
+def test_gating_mechanism_no_sigmoid(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=10, sigmoid_output=False)
     output = gate(input_tensor)
     # Without sigmoid, output is not guaranteed to be in [0, 1]
@@ -55,7 +55,7 @@ def test_gating_mechanism_no_sigmoid(input_tensor):
     assert output.shape == (10, 20)
 
 
-def test_gating_mechanism_assertions():
+def test_gating_mechanism_assertions() -> None:
     with pytest.raises(AssertionError):
         # Both bottleneck_factor and bottleneck_dim are None
         GatingMechanism(input_dim=20)
@@ -64,13 +64,13 @@ def test_gating_mechanism_assertions():
         GatingMechanism(input_dim=20, bottleneck_factor=0.5, bottleneck_dim=10)
 
 
-def test_gating_mechanism_custom_activation(input_tensor):
+def test_gating_mechanism_custom_activation(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=10, act_fn=nn.ReLU)
     output = gate(input_tensor)
     assert output.shape == (10, 20)
 
 
-def test_gating_mechanism_dropout(input_tensor):
+def test_gating_mechanism_dropout(input_tensor) -> None:
     gate = GatingMechanism(input_dim=20, bottleneck_dim=10, dropout=0.5)
     gate.train()  # Set to train mode to activate dropout
     output = gate(input_tensor)
