@@ -96,7 +96,7 @@ def run_benchmark(device: str, console: Console) -> None:
     ).to(device)
 
     pathweighted_fff_model = PathWeightedFFF(
-        input_width=dim, depth=depth, output_width=dim
+        input_width=dim, depth=3, output_width=dim
     ).to(device)
 
     ff_model = FeedForward(dim=dim, glu_variant="swiglu", mult=4).to(device)
