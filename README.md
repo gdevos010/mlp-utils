@@ -245,7 +245,55 @@ gmlp = GMLP(
 
 - `ResidualWrapper`: Adds a residual connection to any module.
 
+### a not very accurate benchmark using toy dataset
+                                               
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┓
+┃ Model           ┃ Compile ┃  Params ┃ Runtime (s) ┃ Configuration                                      ┃ Final Loss ┃ Status  ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━┩
+│ mlp             │ True    │  33.41K │       10.15 │ act_fn=GELU                                        │   0.221746 │ Success │
+│ mlp             │ True    │  33.41K │        2.40 │ act_fn=ReLU                                        │   0.225678 │ Success │
+│ mlp             │ True    │  33.41K │        2.39 │ act_fn=SiLU                                        │   0.215601 │ Success │
+│ mlp             │ True    │  33.41K │        2.35 │ act_fn=ReluSquared                                 │   0.246249 │ Success │
+│ mlp             │ True    │  33.41K │        2.53 │ act_fn=Gelu2                                       │   0.252107 │ Success │
+│ mlp             │ True    │  33.41K │        2.44 │ act_fn=BSiLU                                       │   0.211360 │ Success │
+│ mlp             │ True    │  33.41K │        2.51 │ act_fn=ReluNelu(                                   │   0.223811 │ Success │
+│                 │         │         │             │   (forward_fn): ReLU()                             │            │         │
+│                 │         │         │             │   (backward_fn): NeLU()                            │            │         │
+│                 │         │         │             │ )                                                  │            │         │
+│ mlp             │ True    │  33.41K │        2.38 │ act_fn=GELU, residual=True                         │   0.255551 │ Success │
+│ mlp             │ True    │  33.09K │        1.82 │ act_fn=GELU, use_norm=False                        │   0.220111 │ Success │
+│ mlp             │ True    │  33.22K │        2.38 │ act_fn=GELU, pre_norm=True                         │   0.221599 │ Success │
+│ feedforward     │ True    │  33.09K │        1.76 │ glu_variant=none, activation=GELU                  │   0.207531 │ Success │
+│ feedforward     │ True    │  49.73K │        1.90 │ glu_variant=glu                                    │   0.179443 │ Success │
+│ feedforward     │ True    │  49.73K │        1.87 │ glu_variant=swiglu                                 │   0.306741 │ Success │
+│ feedforward     │ True    │  49.73K │        1.89 │ glu_variant=geglu                                  │   0.304403 │ Success │
+│ feedforward     │ True    │  49.73K │        1.82 │ glu_variant=reglu                                  │   0.293338 │ Success │
+│ feedforward     │ True    │  49.73K │        1.70 │ glu_variant=bilinear                               │   0.318753 │ Success │
+│ feedforward     │ True    │  33.34K │        1.76 │ glu_variant=mglu                                   │   0.189905 │ Success │
+│ feedforward     │ True    │  33.34K │        1.79 │ glu_variant=mswiglu                                │   0.204473 │ Success │
+│ feedforward     │ True    │  33.34K │        1.82 │ glu_variant=mgeglu                                 │   0.211235 │ Success │
+│ feedforward     │ True    │  33.34K │        1.78 │ glu_variant=mreglu                                 │   0.213310 │ Success │
+│ feedforward     │ True    │  33.34K │        1.73 │ glu_variant=mbilinear                              │   0.236762 │ Success │
+│ fastfeedforward │ True    │ 398.28K │       18.49 │ glu_variant=swiglu, expert_dim=8                   │   0.176578 │ Success │
+│ fastfeedforward │ True    │ 398.28K │       18.79 │ glu_variant=geglu, expert_dim=8                    │   0.176054 │ Success │
+│ fastfeedforward │ True    │ 267.21K │       18.12 │ glu_variant=mswiglu, expert_dim=8                  │   0.173000 │ Success │
+│ fastfeedforward │ True    │ 398.28K │       17.40 │ glu_variant=swiglu, expert_dim=8                   │   0.171305 │ Success │
+│ fastfeedforward │ True    │ 398.28K │       17.44 │ glu_variant=swiglu, expert_dim=8                   │   0.174691 │ Success │
+│ fastfeedforward │ True    │ 398.28K │       18.10 │ glu_variant=swiglu, expert_dim=8                   │   0.172715 │ Success │
+│ pathweightedfff │ True    │  63.38K │       20.21 │ depth=3                                            │   0.246856 │ Success │
+│ pathweightedfff │ True    │  63.38K │       20.27 │ depth=3, activation=silu                           │   0.250302 │ Success │
+│ pathweightedfff │ True    │ 266.18K │       25.57 │ depth=5                                            │   0.237995 │ Success │
+│ ngpt            │ True    │  49.73K │        2.48 │ scalar_alpha=True                                  │   0.005054 │ Success │
+│ ngpt            │ True    │  49.79K │        2.40 │ scalar_alpha=False                                 │   0.005193 │ Success │
+│ gmlp            │ True    │ 218.11K │       10.33 │                                                    │   0.049925 │ Success │
+│ switch_ffn      │ True    │ 398.34K │       10.07 │ num_experts=8, ff_kwargs={'mult': 4,               │   0.274261 │ Success │
+│                 │         │         │             │ 'glu_variant': 'swiglu'}                           │            │         │
+│ switch_ffn      │ True    │ 399.36K │       17.40 │ num_experts=16, ff_kwargs={'mult': 2,              │   0.362581 │ Success │
+│                 │         │         │             │ 'glu_variant': 'geglu'}                            │            │         │
+└─────────────────┴─────────┴─────────┴─────────────┴────────────────────────────────────────────────────┴────────────┴─────────┘
+
 ## Citations
+
 
 ```bibtex
 @article{Zhang2024ReLU2WD,
