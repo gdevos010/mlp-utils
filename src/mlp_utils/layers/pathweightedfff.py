@@ -3,6 +3,7 @@
 largely inspired by https://github.com/pbelcak/UltraFastBERT/blob/main/benchmark_pytorch/fff/fff_bmm.py"""
 
 import math
+from typing import Callable
 
 import torch
 
@@ -65,6 +66,9 @@ class PathWeightedFFF(nn.Module):
         The depth of the binary tree.
     output_width : int
         The dimensionality of the output features.
+    activation : Callable[[torch.Tensor], torch.Tensor], optional
+        The activation function to use for the path weights.
+        Defaults to `torch.nn.functional.gelu`.
     """
 
     def __init__(
@@ -72,6 +76,7 @@ class PathWeightedFFF(nn.Module):
         input_width: int,
         depth: int,
         output_width: int,
+        activation: Callable[[torch.Tensor], torch.Tensor] = nn.functional.gelu,
     ) -> None:
         super().__init__()
 
@@ -81,9 +86,10 @@ class PathWeightedFFF(nn.Module):
         self.input_width = input_width
         self.depth = depth
         self.output_width = output_width
+        self.activation = activation
 
         # Total nodes in a complete binary tree of depth `d` is 2**(d+1) - 1
-        self.n_nodes = 2 ** (depth + 1) - 1
+        self.n_nodes = 2 ** (self.depth + 1) - 1
         self._initialise_weights()
 
     def _initialise_weights(self) -> None:
@@ -177,7 +183,7 @@ class PathWeightedFFF(nn.Module):
             current_nodes = current_nodes * 2 + plane_choices + 1  # (num_tokens,)
 
         # routing direction (left or right).
-        path_weights = torch.nn.functional.gelu(torch.abs(all_logits))
+        path_weights = self.activation(torch.abs(all_logits))
 
         # --- Path-Weighted Output Computation ---
         # The final output is a weighted sum of the outputs of transformations at each node

@@ -251,6 +251,7 @@ def main() -> None:
         # },
         # PathWeightedFFF variants
         {"model_name": "pathweightedfff", "depth": 3},
+        {"model_name": "pathweightedfff", "depth": 3, "activation": F.silu},
         {"model_name": "pathweightedfff", "depth": 5},
         # nGPT variants
         {"model_name": "ngpt", "scalar_alpha": True},
