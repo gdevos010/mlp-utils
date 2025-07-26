@@ -96,8 +96,8 @@ class FastFeedForward(nn.Module):
         self.glu_variant = glu_variant
 
         if self.dim != self.expert_dim:
-            self.project_in = nn.Linear(self.dim, self.expert_dim)
-            self.project_out = nn.Linear(self.expert_dim, self.dim)
+            self.project_in: nn.Module = nn.Linear(self.dim, self.expert_dim)
+            self.project_out: nn.Module = nn.Linear(self.expert_dim, self.dim)
         else:
             self.project_in = nn.Identity()
             self.project_out = nn.Identity()
