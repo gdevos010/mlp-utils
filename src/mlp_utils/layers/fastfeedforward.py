@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 from .feedforward import FeedForward
+from .glu import SwiGLU
 
 
 class FastFeedForward(nn.Module):
@@ -136,10 +137,8 @@ class FastFeedForward(nn.Module):
             first_expert.net, nn.Sequential
         ):
             return False
-        if len(first_expert.net) < 3:
+        if len(first_expert.net) < 3:  # noqa: PLR2004
             return False
-
-        from .glu import SwiGLU
 
         if not isinstance(first_expert.net[0], SwiGLU):
             return False
@@ -278,9 +277,7 @@ class FastFeedForward(nn.Module):
         return output.reshape(batch_size, seq_len, dim)
 
     def _fast_swiglu_hard_routing(self, x: torch.Tensor) -> torch.Tensor:
-        """Optimized hard routing for SwiGLU experts.
-        Each token is processed by a single expert.
-        """
+        """Optimized hard routing for SwiGLU experts. Each token is processed by a single expert."""
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
 

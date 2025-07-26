@@ -217,38 +217,38 @@ def main() -> None:
         # {"model_name": "feedforward", "glu_variant": "mgeglu"},
         # {"model_name": "feedforward", "glu_variant": "mreglu"},
         # {"model_name": "feedforward", "glu_variant": "mbilinear"},
-        # # FastFeedForward variants
-        # {
-        #     "model_name": "fastfeedforward",
-        #     "glu_variant": "swiglu",
-        #     "expert_dim": base_config["dim"] // 8,
-        # },
-        # {
-        #     "model_name": "fastfeedforward",
-        #     "glu_variant": "geglu",
-        #     "expert_dim": base_config["dim"] // 8,
-        # },
-        # {
-        #     "model_name": "fastfeedforward",
-        #     "glu_variant": "mswiglu",
-        #     "expert_dim": base_config["dim"] // 8,
-        # },
-        # # FastFeedForward with load balancing and master leaf
-        # {
-        #     "model_name": "fastfeedforward",
-        #     "glu_variant": "swiglu",
-        #     "expert_dim": base_config["dim"] // 8,
-        # },
-        # {
-        #     "model_name": "fastfeedforward",
-        #     "glu_variant": "swiglu",
-        #     "expert_dim": base_config["dim"] // 8,
-        # },
-        # {
-        #     "model_name": "fastfeedforward",
-        #     "glu_variant": "swiglu",
-        #     "expert_dim": base_config["dim"] // 8,
-        # },
+        # FastFeedForward variants
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+        },
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "geglu",
+            "expert_dim": base_config["dim"] // 8,
+        },
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "mswiglu",
+            "expert_dim": base_config["dim"] // 8,
+        },
+        # FastFeedForward with load balancing and master leaf
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+        },
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+        },
+        {
+            "model_name": "fastfeedforward",
+            "glu_variant": "swiglu",
+            "expert_dim": base_config["dim"] // 8,
+        },
         # PathWeightedFFF variants
         {"model_name": "pathweightedfff", "depth": 3},
         {"model_name": "pathweightedfff", "depth": 3, "activation": F.silu},

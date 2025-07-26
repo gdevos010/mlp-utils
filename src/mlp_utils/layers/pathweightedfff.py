@@ -1,9 +1,11 @@
 """A PyTorch implementation of a Path-Weighted Fast Feedforward Network.
 
-largely inspired by https://github.com/pbelcak/UltraFastBERT/blob/main/benchmark_pytorch/fff/fff_bmm.py"""
+largely inspired by https://github.com/pbelcak/UltraFastBERT/blob/main/benchmark_pytorch/fff/fff_bmm.py
+"""
 
 import math
-from typing import Callable
+
+from collections.abc import Callable
 
 import torch
 
@@ -125,7 +127,7 @@ class PathWeightedFFF(nn.Module):
                       but with the last dimension as `output_width`.
         """
         # Handle 3D input by flattening and reshaping
-        is_3d = x.dim() == 3
+        is_3d = x.dim() == 3  # noqa: PLR2004
         if is_3d:
             batch_size, seq_len, _ = x.shape
             flat_x = x.reshape(batch_size * seq_len, self.input_width)
@@ -133,7 +135,7 @@ class PathWeightedFFF(nn.Module):
             batch_size = x.shape[0]
             flat_x = x
 
-        if flat_x.dim() != 2 or flat_x.shape[1] != self.input_width:
+        if flat_x.dim() != 2 or flat_x.shape[1] != self.input_width:  # noqa: PLR2004
             raise ValueError(
                 f"Input tensor must be of shape (batch_size, input_width) or "
                 f"(batch_size, seq_len, input_width), but got shape {x.shape}"

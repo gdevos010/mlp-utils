@@ -246,7 +246,7 @@ gmlp = GMLP(
 - `ResidualWrapper`: Adds a residual connection to any module.
 
 ### a not very accurate benchmark using toy dataset
-                                               
+
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━┓
 ┃ Model           ┃ Compile ┃  Params ┃ Runtime (s) ┃ Configuration                                      ┃ Final Loss ┃ Status  ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━┩
@@ -292,8 +292,11 @@ gmlp = GMLP(
 │                 │         │         │             │ 'glu_variant': 'geglu'}                            │            │         │
 └─────────────────┴─────────┴─────────┴─────────────┴────────────────────────────────────────────────────┴────────────┴─────────┘
 
-## Citations
+## TODO
 
+- [] [Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node](https://arxiv.org/html/2405.16836v1)
+
+## Citations
 
 ```bibtex
 @article{Zhang2024ReLU2WD,
@@ -371,8 +374,9 @@ gmlp = GMLP(
       url={https://arxiv.org/abs/2101.03961}, 
 }
 ```
-
+<!-- 
 ```bibtex
+# TODO
 @misc{charalampopoulos2024enhancingfastfeedforward,
       title={Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node}, 
       author={Andreas Charalampopoulos and Nikolas Chatzis and Foivos Ntoulas-Panagiotopoulos and Charilaos Papaioannou and Alexandros Potamianos},
@@ -382,7 +386,7 @@ gmlp = GMLP(
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2405.16836}, 
 }
-```
+``` -->
 
 ```bibtex
 @misc{belcak2023exponentiallyfasterlanguagemodelling,
