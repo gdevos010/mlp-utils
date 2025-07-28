@@ -81,3 +81,54 @@ def test_dropout_layer_presence() -> None:
         isinstance(m, torch.nn.Dropout) for m in mlp_no_dropout.model.modules()
     )
     assert not has_dropout_false
+
+
+def test_mlp_no_norm_layer() -> None:
+    """Tests that no norm layer is added when use_norm is False."""
+    mlp_no_norm = MLP(input_dim=64, use_norm=False)
+    has_norm = any(
+        isinstance(m, (torch.nn.RMSNorm, torch.nn.LayerNorm))
+        for m in mlp_no_norm.model.modules()
+    )
+    assert not has_norm
+
+
+def test_mlp_custom_norm_layer() -> None:
+    """Tests using a custom normalization layer."""
+    from torch.nn import LayerNorm
+
+    mlp = MLP(input_dim=64, use_norm=True, norm_layer=LayerNorm)
+    has_layernorm = any(isinstance(m, LayerNorm) for m in mlp.model.modules())
+    assert has_layernorm
+
+    # Ensure default RMSNorm is not used
+    has_rmsnorm = any(isinstance(m, torch.nn.RMSNorm) for m in mlp.model.modules())
+    assert not has_rmsnorm
+
+
+def test_mlp_custom_act_fn_class() -> None:
+    """Tests using a custom activation function class."""
+    from torch.nn import ReLU
+
+    mlp = MLP(input_dim=64, act_fn=ReLU)
+    has_relu = any(isinstance(m, ReLU) for m in mlp.model.modules())
+    assert has_relu
+
+
+def test_mlp_custom_act_fn_instance() -> None:
+    """Tests using a custom activation function instance."""
+    from torch.nn import ReLU
+
+    mlp = MLP(input_dim=64, act_fn=ReLU())
+    has_relu = any(isinstance(m, ReLU) for m in mlp.model.modules())
+    assert has_relu
+
+
+def test_mlp_post_norm() -> None:
+    """Tests the post-normalization (default) functionality."""
+    mlp = MLP(input_dim=64, pre_norm=False, use_norm=True)
+    layers = list(mlp.model.children())
+    assert isinstance(layers[0], torch.nn.Linear)
+    from torch.nn import RMSNorm
+
+    assert isinstance(layers[1], RMSNorm)

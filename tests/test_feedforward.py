@@ -71,3 +71,44 @@ def test_dropout_presence_and_value() -> None:
     ]
     assert len(dropout_layers_zero) > 0
     assert dropout_layers_zero[0].p == 0.0
+
+
+def test_feedforward_custom_activation() -> None:
+    """Tests using a custom activation function."""
+    ff = FeedForward(dim=DIM_IN, glu_variant="none", activation=torch.nn.ReLU)
+    assert isinstance(ff.net[1], torch.nn.ReLU)
+
+
+def test_feedforward_custom_norm_layer(input_tensor: torch.Tensor) -> None:
+    """Tests using a custom normalization layer."""
+    ff = FeedForward(dim=DIM_IN, pre_norm=True, norm_layer=torch.nn.LayerNorm)
+    assert isinstance(ff.pre_norm, torch.nn.LayerNorm)
+    # Check that it runs
+    ff(input_tensor)
+
+
+def test_proj_attribute_no_glu() -> None:
+    """Tests the proj attribute when no GLU variant is used."""
+    ff = FeedForward(dim=DIM_IN, mult=MULT, glu_variant="none")
+    assert ff.proj is ff.net[0]
+    assert isinstance(ff.proj, torch.nn.Linear)
+    assert ff.proj.in_features == DIM_IN
+    assert ff.proj.out_features == DIM_IN * MULT
+
+
+@pytest.mark.parametrize("glu_variant", list(set(ALL_GLU_VARIANTS) - {"none"}))
+def test_proj_attribute_with_glu(glu_variant: str) -> None:
+    """Tests the proj attribute when a GLU variant is used."""
+    ff = FeedForward(dim=DIM_IN, mult=MULT, glu_variant=glu_variant)
+    assert ff.proj is ff.net[0].proj
+    assert isinstance(ff.proj, torch.nn.Linear)
+    assert ff.proj.in_features == DIM_IN
+
+    hidden_dim = DIM_IN * MULT
+    # Most GLU variants project to double the hidden dimension for the gate and value
+    if "m" in glu_variant:  # Masked GLU
+        expected_out_features = hidden_dim
+    else:
+        expected_out_features = 2 * hidden_dim
+
+    assert ff.proj.out_features == expected_out_features
