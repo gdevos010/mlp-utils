@@ -246,7 +246,6 @@ gmlp = GMLP(
 - `ResidualWrapper`: Adds a residual connection to any module.
 
 ### a not very accurate benchmark using toy dataset
-Of course, here is the data converted to a markdown table.
 
 | Model | Compile | Params | Runtime (s) | Configuration | Final Loss | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
