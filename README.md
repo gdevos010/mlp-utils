@@ -7,7 +7,7 @@ A collection of utilities for multi-layer perceptron models.
 
 ```bash
 
-pip install mlp-utils
+pip install -e mlp-utils
 
 ```
 
