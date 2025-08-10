@@ -18,12 +18,13 @@ class ResidualWrapper(nn.Module):
         self.module = module
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass with residual connection.
+        """Apply the wrapped module with a residual connection.
 
         Args:
-            x: Input tensor
+            x (torch.Tensor): Input tensor of any shape where the last dimension
+                matches the wrapped module's expected input.
 
         Returns:
-            Output with residual connection
+            torch.Tensor: Output tensor with the same shape as `x`.
         """
         return x + self.module(x)

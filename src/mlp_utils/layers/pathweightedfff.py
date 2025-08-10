@@ -114,17 +114,17 @@ class PathWeightedFFF(nn.Module):
         self.b2s = nn.Parameter(torch.zeros(self.n_nodes, self.output_width))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the PathWeightedFFF.
+        """Apply the Path-Weighted FFF.
 
-        Can handle both 2D (batch_size, input_width) and 3D
-        (batch_size, seq_len, input_width) inputs.
+        Supports both 2D and 3D inputs.
 
         Args:
-            x (torch.Tensor): Input tensor.
+            x (torch.Tensor): Input of shape (batch_size, input_width) or
+                (batch_size, seq_len, input_width).
 
         Returns:
-            torch.Tensor: Output tensor with the same dimensions as the input,
-                      but with the last dimension as `output_width`.
+            torch.Tensor: Output of shape (batch_size, output_width) or
+                (batch_size, seq_len, output_width) respectively.
         """
         # Handle 3D input by flattening and reshaping
         is_3d = x.dim() == 3  # noqa: PLR2004

@@ -8,7 +8,11 @@ from .init_weights import initialize_weights
 
 
 class GatingMechanism(nn.Module):
-    """A standardized gating mechanism."""
+    """A standardized gating mechanism.
+
+    Projects the last dimension via a bottleneck and produces gating values, optionally
+    with normalization and sigmoid at the output.
+    """
 
     def __init__(  # noqa: PLR0913, C901
         self,
@@ -86,5 +90,12 @@ class GatingMechanism(nn.Module):
             initialize_weights(module, init_method="gating", layer_name=name)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the gating mechanism."""
+        """Apply the gating mechanism.
+
+        Args:
+            x (torch.Tensor): Input of shape (..., input_dim) and floating dtype.
+
+        Returns:
+            torch.Tensor: Output of shape (..., output_dim) with the same dtype as `x`.
+        """
         return self.gate(x)

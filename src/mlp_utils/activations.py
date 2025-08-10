@@ -7,9 +7,9 @@ from torch import nn
 
 
 class ReluSquared(nn.Module):
-    """Computes the square of the ReLU of the input.
+    """Compute the square of ReLU(x).
 
-    Optionally, the output can be signed.
+    Optionally multiplies by `sign(x)` to produce a signed output.
     """
 
     def __init__(self, signed: bool = False) -> None:
@@ -17,7 +17,14 @@ class ReluSquared(nn.Module):
         self.signed = signed
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for ReluSquared."""
+        """Apply the ReluSquared activation.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape and dtype as `x`.
+        """
         out = F.relu(x).square()
         if not self.signed:
             return out
@@ -25,17 +32,25 @@ class ReluSquared(nn.Module):
 
 
 class Gelu2(nn.Module):
-    """Computes the square of the GELU of the input."""
+    """Compute the square of GELU(x)."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for Gelu2."""
+        """Apply the Gelu2 activation.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape and dtype as `x`.
+        """
         return F.gelu(x).pow(2)
 
 
 class BSiLU(nn.Module):
     """BSiLU activation function.
 
-    Equation 7 from https://arxiv.org/html/2505.22074v1
+    Implements Equation 7 from the referenced paper.
+    See: https://arxiv.org/html/2505.22074v1
     """
 
     def __init__(self, alpha: float = 1.67) -> None:
@@ -43,25 +58,46 @@ class BSiLU(nn.Module):
         self.alpha = alpha
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for BSiLU."""
+        """Apply the BSiLU activation.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape and dtype as `x`.
+        """
         # Equation 7 from https://arxiv.org/html/2505.22074v1
         return (x + self.alpha) * torch.sigmoid(x) - self.alpha / 2
 
 
 class NeLU(nn.Module):
-    """NeLU activation function, often used as the backward function in a Straight-Through-Estimator."""
+    """NeLU activation function.
+
+    Often used as the backward function in a straight-through estimator.
+    """
 
     def __init__(self, alpha: float = 0.05) -> None:
         super().__init__()
         self.alpha = alpha
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for NeLU."""
+        """Apply the NeLU activation.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape and dtype as `x`.
+        """
         return -self.alpha / (1.0 + x.square())
 
 
 class Sugar(nn.Module):
-    """A straight-through estimator that uses the backward_fn only for the negative part of the input."""
+    """Straight-through estimator with custom negative-region gradients.
+
+    Uses the provided `forward_fn` in the forward pass. In the backward pass,
+    gradients for the negative region use `backward_fn`.
+    """
 
     def __init__(self, forward_fn: nn.Module, backward_fn: nn.Module) -> None:
         super().__init__()
@@ -69,7 +105,14 @@ class Sugar(nn.Module):
         self.backward_fn = backward_fn
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for Sugar."""
+        """Apply the Sugar estimator.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape and dtype as `x`.
+        """
         forward_out = self.forward_fn(x)
 
         if not x.requires_grad:
@@ -85,7 +128,10 @@ class Sugar(nn.Module):
 
 
 class StraightThroughEstimator(nn.Module):
-    """A straight-through estimator."""
+    """Straight-through estimator wrapper.
+
+    Uses a hard function in the forward pass and a soft surrogate in backward.
+    """
 
     def __init__(self, forward_fn: nn.Module, backward_fn: nn.Module) -> None:
         super().__init__()
@@ -93,7 +139,14 @@ class StraightThroughEstimator(nn.Module):
         self.backward_fn = backward_fn
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for StraightThroughEstimator."""
+        """Apply the straight-through estimator.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Output tensor with the same shape and dtype as `x`.
+        """
         hard = self.forward_fn(x)
 
         if not x.requires_grad:
@@ -104,18 +157,22 @@ class StraightThroughEstimator(nn.Module):
 
 
 class ReluNelu(Sugar):
-    """An activation that uses ReLU in the forward pass and NeLU in the backward pass for the negative part.
+    """ReLU forward with NeLU gradients on the negative region.
 
-    This was found to be effective in transformer models.
+    Often effective in transformer models.
     """
 
     def __init__(self, alpha: float = 0.05) -> None:
-        """Initializes the ReluNelu activation."""
+        """Initialize the ReluNelu activation.
+
+        Args:
+            alpha (float): NeLU alpha parameter.
+        """
         super().__init__(nn.ReLU(), NeLU(alpha))
 
 
 class SugarReLU(StraightThroughEstimator):
-    """A straight-through estimator that uses ReLU in the forward pass and sigmoid in the backward pass."""
+    """Straight-through estimator with ReLU forward and sigmoid backward."""
 
     def __init__(self) -> None:
         super().__init__(nn.ReLU(), nn.Sigmoid())

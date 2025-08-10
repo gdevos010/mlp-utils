@@ -22,38 +22,24 @@ from .init_weights import initialize_weights
 
 
 class FeedForward(nn.Module):
-    r"""Feed-forward block with optional gated variants.
+    """Feed-forward block with optional GLU variants.
 
-    Parameters
-    ----------
-    dim : int
-        Input / output dimension.
-    mult : int, default 4
-        Expansion factor for the hidden layer.
-    dropout : float, default 0.0
-        Dropout probability applied *after* the gate.
-    activation : nn.Module, default nn.GELU
-        Activation used for the vanilla MLP path. Ignored for GLU variants.
-    glu_variant : Literal[
-        "none", "glu", "geglu", "swiglu", "reglu", "bilinear",
-        "mglu", "mgeglu", "mswiglu", "mreglu", "mbilinear"
-        ], default "none"
-        - **"none"** - conventional two-layer MLP
-        - **"glu"** - classic GLU: _value·σ(gate)_
-        - **"geglu"** - GeGLU: _value·GELU(gate)_
-        - **"swiglu"** - SwiGLU: _value·SiLU(gate)_
-        - **"reglu"** - ReGLU: _value·ReLU(gate)_
-        - **"bilinear"** - Bilinear: _value·gate_
-        - **"mglu"** - Masked GLU with Sigmoid
-        - **"mgeglu"** - Masked GLU with GELU
-        - **"mswiglu"** - Masked GLU with SiLU
-        - **"mreglu"** - Masked GLU with ReLU
-        - **"mbilinear"** - Masked Bilinear (Identity activation)
-    pre_norm : bool, default False
-        If ``True`` a normalization layer (``norm_layer``) is applied *before*
-        the projections.
-    norm_layer : nn.Module, default nn.RMSNorm
-        Normalization layer class.
+    This module projects the last dimension, so it supports inputs of rank 2+
+    as long as the trailing dimension equals `dim`.
+
+    Args:
+        dim (int): Input and output feature dimension.
+        mult (int): Expansion factor for the hidden layer. Defaults to 4.
+        dropout (float): Dropout probability applied after the gate or activation.
+            Defaults to 0.0.
+        activation (type[nn.Module]): Activation for the vanilla MLP path (ignored
+            for GLU variants). Defaults to `nn.GELU`.
+        glu_variant (Literal["none","glu","geglu","swiglu","reglu","bilinear",
+            "mglu","mgeglu","mswiglu","mreglu","mbilinear"]): Selects the GLU
+            variant or a conventional MLP when "none". Defaults to "none".
+        pre_norm (bool): If True, applies `norm_layer` before projections.
+            Defaults to False.
+        norm_layer (type[nn.Module]): Normalization layer class. Defaults to `nn.RMSNorm`.
     """
 
     def __init__(
@@ -129,14 +115,13 @@ class FeedForward(nn.Module):
                 initialize_weights(linear_layers[-1], init_method="default", scale=0.1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
+        """Apply the feed-forward block.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (..., dim), where the last
-                dimension equals the configured ``dim`` for this module.
+            x (torch.Tensor): Input of shape (..., dim) and floating dtype.
 
         Returns:
-            torch.Tensor: Output tensor of shape (..., dim).
+            torch.Tensor: Output of shape (..., dim) with the same dtype as `x`.
         """
         if self.pre_norm is not None:
             x = self.pre_norm(x)

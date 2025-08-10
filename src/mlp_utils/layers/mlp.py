@@ -11,7 +11,24 @@ from .residual import ResidualWrapper
 
 
 class MLP(nn.Module):
-    """A standardized MLP module."""
+    """A standardized MLP module.
+
+    Projects the last dimension, supporting inputs of rank 2+ where the trailing
+    dimension equals `input_dim`.
+
+    Args:
+        input_dim (int): Input feature dimension.
+        output_dim (int | None): Output feature dimension. Defaults to `input_dim`.
+        hidden_factor (int): Multiplier for hidden dimension (`hidden_dim = input_dim * hidden_factor`).
+            Defaults to 4.
+        dropout (float): Dropout probability. Defaults to 0.1.
+        act_fn (type[nn.Module] | nn.Module): Activation function. Defaults to `nn.GELU`.
+        use_norm (bool): Whether to insert normalization layers. Defaults to True.
+        norm_layer (type[nn.Module]): Normalization class to use. Defaults to `nn.RMSNorm`.
+        residual (bool): Wrap with a residual connection when input_dim == output_dim. Defaults to False.
+        norm_mode (Literal["pre","post","both","none"]): Where to apply normalization relative to the
+            first linear layer (ignored if `use_norm=False`). Defaults to "post".
+    """
 
     def __init__(  # noqa: PLR0913, C901
         self,
@@ -94,12 +111,12 @@ class MLP(nn.Module):
             self.model = ResidualWrapper(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the MLP.
+        """Apply the MLP.
 
         Args:
-            x: Tensor of shape (..., input_dim)
+            x (torch.Tensor): Input of shape (..., input_dim) and floating dtype.
 
         Returns:
-            Tensor of shape (..., output_dim)
+            torch.Tensor: Output of shape (..., output_dim) with the same dtype as `x`.
         """
         return self.model(x)

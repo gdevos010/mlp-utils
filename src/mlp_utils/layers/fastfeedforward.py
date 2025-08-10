@@ -13,50 +13,24 @@ from .glu import SwiGLU
 class FastFeedForward(nn.Module):
     """Fast Feedforward Network (FFF) layer.
 
-    Implements the architecture from "Fast Feedforward Networks" by Belcak et al.
-    (https://arxiv.org/abs/2308.14711). This layer uses a tree-structured
-    routing mechanism to select a small subset of neurons (experts) for each
-    input token, achieving logarithmic time complexity with respect to the
-    number of experts.
+    Implements the architecture from "Fast Feedforward Networks" by Belcak & Wattenhofer
+    (`https://arxiv.org/abs/2308.14711`). A binary routing tree selects one expert per
+    token during hard routing; soft routing mixes leaf experts during training if enabled.
 
-    Each input token is routed through a binary tree of depth `depth`. At each
-    node, a learned router decides which of the two children to proceed to.
-    The leaves of the tree are `FeedForward` networks (experts) that process
-    the token.
+    This layer expects 3D inputs and preserves the leading two dimensions.
 
-    Attributes:
-    ----------
-    dim : int
-        Input and output dimension.
-    expert_dim : int
-        Dimension of the expert networks.
-    depth : int
-        Depth of the routing tree.
-    num_experts : int
-        Total number of experts at the leaves of the tree (2**depth).
-
-    Parameters
-    ----------
-    dim : int
-        Input and output dimension of the layer.
-    depth : int
-        Depth of the routing tree. The number of experts will be 2**depth.
-    expert_dim : int, optional
-        Dimension of the expert networks. If not provided, it is set to `dim`.
-    mult : int, default 4
-        Expansion factor for the hidden layer of each expert FeedForward network.
-    dropout : float, default 0.0
-        Dropout probability for the expert networks.
-    activation : type[nn.Module], default nn.GELU
-        Activation used for the vanilla MLP path in experts.
-    glu_variant : str, default "none"
-        GLU variant for the expert FeedForward networks. See `FeedForward` class.
-    pre_norm : bool, default False
-        If `True`, applies layer normalization before the expert networks.
-    norm_layer : type[nn.Module], default nn.RMSNorm
-        Normalization layer class to use if `pre_norm` is `True`.
-    soft_routing_during_train : bool, default True
-        If `True`, uses differentiable soft routing during training.
+    Args:
+        dim (int): Input and output model dimension.
+        depth (int): Tree depth; number of experts is `2 ** depth`.
+        expert_dim (int | None): Expert model dimension. Defaults to `dim`.
+        mult (int): Expansion factor for expert hidden layers. Defaults to 4.
+        dropout (float): Dropout probability inside experts. Defaults to 0.0.
+        activation (type[nn.Module]): Activation for vanilla MLP experts. Defaults to `nn.GELU`.
+        glu_variant (Literal["none","glu","geglu","swiglu","reglu","bilinear",
+            "mglu","mgeglu","mswiglu","mreglu","mbilinear"]): Expert type. Defaults to "none".
+        pre_norm (bool): Apply `norm_layer` before expert nets. Defaults to False.
+        norm_layer (type[nn.Module]): Normalization class when `pre_norm` is True. Defaults to `nn.RMSNorm`.
+        soft_routing_during_train (bool): Use differentiable soft routing while training. Defaults to True.
     """
 
     def __init__(  # noqa: PLR0913, C901
@@ -145,20 +119,29 @@ class FastFeedForward(nn.Module):
         return isinstance(first_expert.net[2], nn.Linear)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the FastFeedForward layer.
+        """Apply the Fast Feedforward layer.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, dim).
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim) and floating dtype.
 
         Returns:
-            torch.Tensor: Output tensor of the same shape as the input.
+            torch.Tensor: Output of shape (batch_size, seq_len, dim) with the same dtype as `x`.
         """
         if self.training and self.soft_routing_during_train:
             return self._soft_routing_forward(x)
         return self._hard_routing_forward(x)
 
     def _soft_routing_forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass using soft, differentiable routing. Used for training. Each token's output is a weighted average of all experts' outputs."""
+        """Soft, differentiable routing (training).
+
+        Each token's output is a weighted average of leaf expert outputs.
+
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
+
+        Returns:
+            torch.Tensor: Output of shape (batch_size, seq_len, dim).
+        """
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
         num_tokens = flat_x.shape[0]
@@ -207,7 +190,14 @@ class FastFeedForward(nn.Module):
         return output.reshape(batch_size, seq_len, dim)
 
     def _get_expert_indices(self, flat_x: torch.Tensor) -> torch.Tensor:
-        """Determines which expert each token is routed to by traversing the tree."""
+        """Traverse the routing tree to select a leaf expert per token.
+
+        Args:
+            flat_x (torch.Tensor): Flattened inputs of shape (num_tokens, dim).
+
+        Returns:
+            torch.Tensor: Integer tensor of shape (num_tokens,) with expert indices in [0, num_experts).
+        """
         num_tokens = flat_x.shape[0]
         leaf_indices = torch.zeros(num_tokens, dtype=torch.long, device=flat_x.device)
 
@@ -234,13 +224,23 @@ class FastFeedForward(nn.Module):
         return leaf_indices
 
     def _hard_routing_forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Dispatch to the appropriate hard routing implementation."""
+        """Hard routing forward pass.
+
+        Dispatches to an optimized path when compatible, otherwise uses a generic path.
+        """
         if self._is_swiglu_fast_path_compatible:
             return self._fast_swiglu_hard_routing(x)
         return self._generic_hard_routing(x)
 
     def _generic_hard_routing(self, x: torch.Tensor) -> torch.Tensor:
-        """Generic hard routing that works with any expert type."""
+        """Generic hard routing compatible with any expert type.
+
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
+
+        Returns:
+            torch.Tensor: Output of shape (batch_size, seq_len, dim).
+        """
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
 
@@ -277,7 +277,16 @@ class FastFeedForward(nn.Module):
         return output.reshape(batch_size, seq_len, dim)
 
     def _fast_swiglu_hard_routing(self, x: torch.Tensor) -> torch.Tensor:
-        """Optimized hard routing for SwiGLU experts. Each token is processed by a single expert."""
+        """Optimized hard routing for SwiGLU experts.
+
+        Processes each token with a single expert using batched matmuls.
+
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
+
+        Returns:
+            torch.Tensor: Output of shape (batch_size, seq_len, dim).
+        """
         batch_size, seq_len, dim = x.shape
         flat_x = x.reshape(batch_size * seq_len, dim)
 

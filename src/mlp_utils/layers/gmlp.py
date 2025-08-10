@@ -7,15 +7,14 @@ from torch import nn
 
 
 class SpatialGatingUnit(nn.Module):
-    """Implements the Spatial Gating Unit (SGU) for the gMLP model.
+    """Spatial Gating Unit (SGU) for gMLP.
 
-    The SGU enables cross-token communication by applying a linear projection
-    across the sequence dimension. This projection is learned and applied to a
-    normalized version of the input tensor.
+    Performs a learned linear projection across the sequence dimension on a
+    normalized representation, enabling cross-token communication.
 
     Args:
-        dim (int): The dimension of the input tensor.
-        seq_len (int): The length of the input sequence.
+        dim (int): Feature dimension of each token.
+        seq_len (int): Sequence length (projection dimension).
     """
 
     def __init__(self, dim: int, seq_len: int) -> None:
@@ -26,7 +25,14 @@ class SpatialGatingUnit(nn.Module):
         nn.init.ones_(self.proj.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the SpatialGatingUnit."""
+        """Apply the Spatial Gating Unit.
+
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
+
+        Returns:
+            torch.Tensor: Output of shape (batch_size, seq_len, dim).
+        """
         shortcut = x
         x_norm = self.norm(x)
         x_gated = rearrange(x_norm, "b n d -> b d n")
@@ -44,9 +50,9 @@ class GMLPBlock(nn.Module):
     operation.
 
     Args:
-        dim (int): The input and output dimension of the block.
-        dim_ff (int): The inner dimension of the feedforward network.
-        seq_len (int): The length of the input sequence.
+        dim (int): Input and output model dimension.
+        dim_ff (int): Feedforward inner (hidden) dimension.
+        seq_len (int): Sequence length (for SGU).
     """
 
     def __init__(self, dim: int, dim_ff: int, seq_len: int) -> None:
@@ -58,7 +64,14 @@ class GMLPBlock(nn.Module):
         self.proj_out = nn.Linear(dim_ff, dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the GMLPBlock."""
+        """Apply the gMLP block.
+
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
+
+        Returns:
+            torch.Tensor: Output of shape (batch_size, seq_len, dim).
+        """
         u, v = self.proj_in(x).chunk(2, dim=-1)
         u = self.activation(u)
         v = self.sgu(v)
@@ -75,10 +88,10 @@ class GMLP(nn.Module):
     requiring self-attention mechanisms.
 
     Args:
-        dim (int): The dimension of the input tokens.
-        dim_ff (int): The inner dimension of the feedforward network in each block.
-        seq_len (int): The length of the input sequence.
-        depth (int): The number of gMLP blocks to stack.
+        dim (int): Token feature dimension.
+        dim_ff (int): Inner (hidden) dimension for each block.
+        seq_len (int): Sequence length.
+        depth (int): Number of blocks.
     """
 
     def __init__(self, dim: int, dim_ff: int, seq_len: int, depth: int) -> None:
@@ -94,7 +107,14 @@ class GMLP(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the GMLP model."""
+        """Apply the gMLP stack.
+
+        Args:
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
+
+        Returns:
+            torch.Tensor: Output of shape (batch_size, seq_len, dim).
+        """
         for block in self.blocks:
             x = block(x) + x
         return x

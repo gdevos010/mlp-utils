@@ -28,7 +28,18 @@ def default(v: T | None, d: T) -> T:
 
 
 def l2norm(t: torch.Tensor, dim: int = -1, norm_eps: float = 0.0) -> torch.Tensor:
-    """L2 normalizes a tensor, with an optional epsilon for soft normalization."""
+    """L2-normalize a tensor with optional soft normalization.
+
+    Args:
+        t (torch.Tensor): Input tensor of any shape and floating dtype.
+        dim (int): Dimension along which to compute the norm. Defaults to -1.
+        norm_eps (float): Soft normalization epsilon. If `0.0`, uses strict unit
+            normalization. Otherwise, scales by a detached target norm in
+            `[1 - norm_eps, 1 + norm_eps]`. Defaults to 0.0.
+
+    Returns:
+        torch.Tensor: Tensor of the same shape and dtype as `t`, normalized along `dim`.
+    """
     if norm_eps == 0.0:
         return F.normalize(t, p=2, dim=dim)
     else:
@@ -40,7 +51,7 @@ def l2norm(t: torch.Tensor, dim: int = -1, norm_eps: float = 0.0) -> torch.Tenso
 
 
 class L2Norm(nn.Module):
-    """Wrapper for l2norm to be used with parametrization."""
+    """Module wrapper for `l2norm`, usable with parametrizations."""
 
     def __init__(self, dim: int = -1, norm_eps: float = 0.0) -> None:
         super().__init__()
@@ -48,7 +59,14 @@ class L2Norm(nn.Module):
         self.norm_eps = norm_eps
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the L2Norm."""
+        """Apply L2 normalization.
+
+        Args:
+            t (torch.Tensor): Input tensor of any shape and floating dtype.
+
+        Returns:
+            torch.Tensor: Tensor with the same shape and dtype as `t`, L2-normalized.
+        """
         return l2norm(t, dim=self.dim, norm_eps=self.norm_eps)
 
 
@@ -70,7 +88,14 @@ class NormLinear(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the NormLinear."""
+        """Apply the normalized linear transformation.
+
+        Args:
+            x (torch.Tensor): Input of shape (..., dim_in).
+
+        Returns:
+            torch.Tensor: Output of shape (..., dim_out).
+        """
         return self.linear(x)
 
 
@@ -86,18 +111,21 @@ class Scale(nn.Module):
         self.forward_scale = init / scale
 
     def forward(self) -> torch.Tensor:
-        """Forward pass for the Scale."""
+        """Return the current scale vector.
+
+        Returns:
+            torch.Tensor: A 1D tensor of shape (dim,) representing the scaling factors.
+        """
         return self.scale * self.forward_scale
 
 
 class NGPT(nn.Module):
-    """Implements the MLP block of the Normalized Transformer (nGPT) as described in.
+    """nGPT MLP block with hyperspherical representation updates.
 
-    "nGPT: Normalized Transformer with Representation Learning on the Hypersphere".
-    (https://arxiv.org/html/2410.01131v2)
-
-    This block takes a feedforward network and wraps it with the nGPT update rule.
-    The input and output hidden states are normalized to have unit L2 norm.
+    Wraps a feedforward network with the nGPT update rule. Both input and output
+    hidden states are L2-normalized along the last dimension.
+    See: "nGPT: Normalized Transformer with Representation Learning on the Hypersphere"
+    (`https://arxiv.org/html/2410.01131v2`).
     """
 
     def __init__(
@@ -142,14 +170,14 @@ class NGPT(nn.Module):
         return True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Applies the nGPT MLP block transformation.
+        """Apply the nGPT MLP block transformation.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (..., dim).
-                              It is internally normalized to lie on the hypersphere.
+            x (torch.Tensor): Input of shape (..., dim). Internally L2-normalized
+                along the last dimension to lie on the hypersphere.
 
         Returns:
-            torch.Tensor: Output tensor of shape (..., dim), which is also normalized.
+            torch.Tensor: Output of shape (..., dim), L2-normalized along the last dimension.
         """
         # The nGPT block operates on normalized vectors on the hypersphere.
         # As per the paper, the input x is brought to the hypersphere.

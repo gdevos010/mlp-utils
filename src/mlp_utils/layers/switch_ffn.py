@@ -66,15 +66,15 @@ class SwitchFFN(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for the Switch FFN layer.
+        """Apply the Switch FFN layer.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, dim).
+            x (torch.Tensor): Input of shape (batch_size, seq_len, dim).
 
         Returns:
-            A tuple containing:
-            - torch.Tensor: The output tensor of shape (batch_size, seq_len, dim).
-            - torch.Tensor: The auxiliary load balancing loss.
+            tuple[torch.Tensor, torch.Tensor]:
+                - Output of shape (batch_size, seq_len, dim).
+                - Auxiliary load-balancing loss scalar (0-dim tensor).
         """
         batch_size, seq_len, dim = x.shape
         x = x.view(-1, dim)
