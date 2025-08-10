@@ -16,7 +16,7 @@ from torch import nn
 def initialize_weights(  # noqa
     module: nn.Module,
     init_method: Literal[
-        "default", "attention", "gating", "embedding", "expert"
+        "default",  "gating", "embedding", "expert"
     ] = "default",
     nonlinearity: str = "relu",
     scale: float = 1.0,
@@ -28,7 +28,6 @@ def initialize_weights(  # noqa
         module: The module to initialize
         init_method: Initialization strategy to use
             - default: Standard initialization for general layers
-            - attention: For attention layers (Q, K, V projections)
             - gating: For gates with sigmoid outputs (bias initialized to 1.0)
             - embedding: For embedding layers
             - expert: For expert networks in MoE
@@ -40,10 +39,6 @@ def initialize_weights(  # noqa
     if init_method == "default":
         if any(x in layer_name.lower() for x in ["gate", "gating"]):
             init_method = "gating"
-        elif any(
-            x in layer_name.lower() for x in ["q_proj", "k_proj", "v_proj", "attention"]
-        ):
-            init_method = "attention"
         elif any(x in layer_name.lower() for x in ["embed", "token"]):
             init_method = "embedding"
         elif any(x in layer_name.lower() for x in ["expert", "router"]):
@@ -51,10 +46,7 @@ def initialize_weights(  # noqa
 
     # Linear layers
     if isinstance(module, nn.Linear):
-        if init_method == "attention":
-            # For attention projections (Q, K, V)
-            nn.init.xavier_uniform_(module.weight, gain=1 / math.sqrt(2) * scale)
-        elif init_method == "gating":
+        if init_method == "gating":
             # For gating mechanisms
             nn.init.xavier_uniform_(module.weight, gain=0.1 * scale)
             if module.bias is not None:
@@ -110,7 +102,7 @@ def initialize_weights(  # noqa
 def apply_initialization(
     model: nn.Module,
     init_method: Literal[
-        "default", "attention", "gating", "embedding", "expert"
+        "default", "gating", "embedding", "expert"
     ] = "default",
     nonlinearity: str = "relu",
     scale: float = 1.0,
@@ -133,37 +125,9 @@ def apply_initialization(
         )
 
 
-def init_attention_blocks(
-    attention_module: nn.Module, scale: float = 1.0, init_output_near_zero: bool = True
-) -> None:
-    """Initialize attention blocks with specialized attention initialization.
-
-    Args:
-        attention_module: The attention module to initialize
-        scale: Scale factor for initialization
-        init_output_near_zero: Whether to initialize output projection near zero
-    """
-    # Initialize query/key/value projections
-    for name, module in attention_module.named_modules():
-        if any(x in name for x in ["q_proj", "k_proj", "v_proj"]):
-            if "lime" in name:
-                continue
-            nn.init.xavier_uniform_(module.weight, gain=1 / math.sqrt(2) * scale)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-
-        # Initialize output projection with small weights
-        elif "output_proj" in name or "out_proj" in name:
-            if init_output_near_zero:
-                nn.init.xavier_uniform_(module.weight, gain=0.1 * scale)
-            else:
-                nn.init.xavier_uniform_(module.weight, gain=1.0 * scale)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-
 
 def create_initializer(
-    init_method: Literal["default", "attention", "gating", "embedding", "expert"],
+    init_method: Literal["default", "gating", "embedding", "expert"],
     nonlinearity: str = "relu",
     scale: float = 1.0,
 ) -> Callable[[nn.Module], None]:

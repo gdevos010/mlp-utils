@@ -35,7 +35,7 @@ class Gelu2(nn.Module):
 class BSiLU(nn.Module):
     """BSiLU activation function.
 
-    Equation 7 from https://arxiv.org/html/2405.02207v1
+    Equation 7 from https://arxiv.org/html/2505.22074v1
     """
 
     def __init__(self, alpha: float = 1.67) -> None:

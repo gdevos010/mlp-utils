@@ -80,17 +80,17 @@ class SwitchFFN(nn.Module):
         x = x.view(-1, dim)
         num_tokens = x.shape[0]
 
-        # 1. Get router logits and probabilities
+        # Get router logits and probabilities
         router_logits = self.router(x)
         router_probs = F.softmax(router_logits, dim=-1, dtype=torch.float32).to(x.dtype)
 
-        # 2. For each token, get the top-1 expert and its gating weight
+        # For each token, get the top-1 expert and its gating weight
         gating_weights, expert_indices = torch.max(router_probs, dim=-1)
 
-        # 3. Create a one-hot mask for the expert assignments
+        # Create a one-hot mask for the expert assignments
         expert_mask = F.one_hot(expert_indices, self.num_experts)
 
-        # 4. Calculate expert capacity and drop tokens that exceed it
+        # Calculate expert capacity and drop tokens that exceed it
         capacity = int((num_tokens / self.num_experts) * self.capacity_factor)
         capacity = max(capacity, 1)
 
@@ -98,10 +98,10 @@ class SwitchFFN(nn.Module):
         capacity_mask = position_in_expert < capacity
         expert_mask = expert_mask * capacity_mask
 
-        # 5. Mask out the gating weights of dropped tokens
+        # Mask out the gating weights of dropped tokens
         gating_weights = gating_weights * expert_mask.sum(dim=-1)
 
-        # 6. Calculate auxiliary load balancing loss
+        # Calculate auxiliary load balancing loss
         tokens_per_expert = expert_mask.sum(dim=0)
         fraction_tokens_per_expert = tokens_per_expert / num_tokens
         fraction_probs_per_expert = router_probs.mean(dim=0)
@@ -111,7 +111,7 @@ class SwitchFFN(nn.Module):
             * (fraction_tokens_per_expert * fraction_probs_per_expert).sum()
         )
 
-        # 7. Dispatch tokens to their experts
+        # Dispatch tokens to their experts
         final_output = torch.zeros_like(x)
         for i, expert_ffn in enumerate(self.experts):
             token_indices = torch.where(expert_mask[:, i] == 1)[0]
@@ -121,7 +121,7 @@ class SwitchFFN(nn.Module):
                 weighted_output = expert_output * gating_weights[token_indices, None]
                 final_output.index_add_(0, token_indices, weighted_output)
 
-        # 8. For dropped tokens, use the original input (identity function)
+        # For dropped tokens, use the original input (identity function)
         dropped_mask = expert_mask.sum(dim=-1) == 0
         final_output[dropped_mask] = x[dropped_mask]
 

@@ -160,27 +160,27 @@ class NGPT(nn.Module):
         """Specifies that the target for this model should be normalized for loss calculation."""
         return True
 
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Applies the nGPT MLP block transformation.
 
         Args:
-            h (torch.Tensor): Input tensor of shape (..., dim).
+            x (torch.Tensor): Input tensor of shape (..., dim).
                               It is internally normalized to lie on the hypersphere.
 
         Returns:
             torch.Tensor: Output tensor of shape (..., dim), which is also normalized.
         """
         # The nGPT block operates on normalized vectors on the hypersphere.
-        # As per the paper, the input h is brought to the hypersphere.
-        h_norm = l2norm(h, norm_eps=self.norm_eps)
+        # As per the paper, the input x is brought to the hypersphere.
+        x_norm = l2norm(x, norm_eps=self.norm_eps)
 
-        # h_M <- Norm(MLP(h_norm))
-        h_m = self.feedforward_net(h_norm)
-        h_m_norm = l2norm(h_m, norm_eps=self.norm_eps)
+        # x_M <- Norm(MLP(x_norm))
+        x_m = self.feedforward_net(x_norm)
+        x_m_norm = l2norm(x_m, norm_eps=self.norm_eps)
 
-        # h <- Norm(h_norm + α_M * (h_M - h_norm))
-        # This is a linear interpolation (LERP) step on the hypersphere.
-        h_updated = h_norm + self.alpha_m() * (h_m_norm - h_norm)
-        h_out = l2norm(h_updated, norm_eps=self.norm_eps)
+        # x <- Norm(x_norm + α_M * (x_M - x_norm))
+        # Linear interpolation (LERP) step on the hypersphere.
+        x_updated = x_norm + self.alpha_m() * (x_m_norm - x_norm)
+        x_out = l2norm(x_updated, norm_eps=self.norm_eps)
 
-        return h_out
+        return x_out
