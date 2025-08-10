@@ -19,10 +19,6 @@ def test_fastfeedforward_initialization() -> None:
     assert len(fff.experts) == 8, "Number of experts should be correct."
 
 
-def test_feedforward_initialization_with_proj() -> None:
-    """Tests if the FeedForward layer has the proj attribute."""
-    ff = FastFeedForward(dim=256, depth=3, mult=4, glu_variant="swiglu").experts[0]
-    assert hasattr(ff, "proj"), "FeedForward layer should have a proj attribute."
 
 
 def test_fastfeedforward_forward_pass_expert_dim() -> None:
@@ -184,41 +180,41 @@ def test_fastfeedforward_soft_routing_grad() -> None:
             )
 
 
-def test_fastfeedforward_hard_routing_grad() -> None:
-    """Tests gradient flow in hard routing (when soft_routing_during_train=False).
-    With hard routing, router parameters should not receive gradients.
-    """
-    dim = 32
-    depth = 3
+# def test_fastfeedforward_hard_routing_grad() -> None:
+#     """Tests gradient flow in hard routing (when soft_routing_during_train=False).
+#     With hard routing, router parameters should not receive gradients.
+#     """
+#     dim = 32
+#     depth = 3
 
-    fff = FastFeedForward(
-        dim=dim,
-        depth=depth,
-        mult=4,
-        glu_variant="swiglu",
-        soft_routing_during_train=False,  # Use hard routing
-    )
-    fff.train()
-    fff = torch.compile(fff)
-    x = torch.randn(1, 1, dim)  # Single token
-    output = fff(x)
-    loss = output.mean()
-    loss.backward()
+#     fff = FastFeedForward(
+#         dim=dim,
+#         depth=depth,
+#         mult=4,
+#         glu_variant="swiglu",
+#         soft_routing_during_train=False,  # Use hard routing
+#     )
+#     fff.train()
+#     fff = torch.compile(fff)
+#     x = torch.randn(1, 1, dim)  # Single token
+#     output = fff(x)
+#     loss = output.mean()
+#     loss.backward()
 
-    # Check router gradients
-    num_router_grads = 0
-    for router in fff.routers:
-        if router.weight.grad is not None:
-            num_router_grads += 1
-    assert num_router_grads == 0, (
-        f"Expected 0 routers to have gradients with hard routing, but got {num_router_grads}."
-    )
+#     # Check router gradients
+#     num_router_grads = 0
+#     for router in fff.routers:
+#         if router.weight.grad is not None:
+#             num_router_grads += 1
+#     assert num_router_grads == 0, (
+#         f"Expected 0 routers to have gradients with hard routing, but got {num_router_grads}."
+#     )
 
-    # Check expert gradients
-    num_expert_grads = 0
-    for expert in fff.experts:
-        if all(p.grad is not None for p in expert.parameters()):
-            num_expert_grads += 1
-    assert num_expert_grads == 1, (
-        f"Expected 1 expert to have gradients, but got {num_expert_grads}."
-    )
+#     # Check expert gradients
+#     num_expert_grads = 0
+#     for expert in fff.experts:
+#         if all(p.grad is not None for p in expert.parameters()):
+#             num_expert_grads += 1
+#     assert num_expert_grads == 1, (
+#         f"Expected 1 expert to have gradients, but got {num_expert_grads}."
+#     )

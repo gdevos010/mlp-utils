@@ -12,6 +12,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrize import register_parametrization
 
+from .feedforward import FeedForward
+from .glu import SwiGLU
+
 T = TypeVar("T")
 
 
@@ -88,29 +91,6 @@ class Scale(nn.Module):
         return self.scale * self.forward_scale
 
 
-class SwiGLU(nn.Module):
-    """SwiGLU feedforward network using normalized linear layers."""
-
-    def __init__(self, dim: int, expand_factor: int = 4, norm_eps: float = 0.0) -> None:
-        super().__init__()
-        dim_inner = int(dim * expand_factor * 2 / 3)
-        self.norm_linear_hidden = NormLinear(
-            dim, dim_inner, norm_dim_in=True, norm_eps=norm_eps
-        )
-        self.norm_linear_gate = NormLinear(
-            dim, dim_inner, norm_dim_in=True, norm_eps=norm_eps
-        )
-        self.norm_linear_out = NormLinear(
-            dim_inner, dim, norm_dim_in=False, norm_eps=norm_eps
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the SwiGLU."""
-        hidden = self.norm_linear_hidden(x)
-        gate = self.norm_linear_gate(x)
-        return self.norm_linear_out(F.silu(gate) * hidden)
-
-
 class NGPT(nn.Module):
     """Implements the MLP block of the Normalized Transformer (nGPT) as described in.
 
@@ -135,7 +115,8 @@ class NGPT(nn.Module):
         Args:
             dim (int): The feature dimension of the hidden states.
             feedforward_net (nn.Module, optional): The feedforward network (MLP) to be wrapped.
-                                                   If None, a SwiGLU network is used. Defaults to None.
+                                                   If None, a `FeedForward` network with SwiGLU is used.
+                                                   Defaults to None.
             scalar_alpha (bool): If True, use a single scalar for alpha_m.
                                  If False, use a vector of size `dim`. Defaults to False.
             alpha_m_init (float): Initial value for the learnable parameter alpha_m.
@@ -144,7 +125,8 @@ class NGPT(nn.Module):
             norm_eps (float): Epsilon for soft normalization. Defaults to 0.0 (hard normalization).
         """
         super().__init__()
-        self.feedforward_net = default(feedforward_net, SwiGLU(dim, norm_eps=norm_eps))
+        ff_network = FeedForward(dim=dim, mult=4, glu_variant="swiglu")
+        self.feedforward_net = default(feedforward_net, ff_network)
         self.norm_eps = norm_eps
 
         if scalar_alpha:

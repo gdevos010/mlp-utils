@@ -288,6 +288,8 @@ gmlp = GMLP(
 ## TODO
 
 - [] [Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node](https://arxiv.org/html/2405.16836v1)
+- [] limiting soft routing to top-k paths (stochastic top-k or beam) to reduce compute work during training 
+
 
 ## Citations
 

@@ -3,8 +3,8 @@
 import torch
 import torch.nn.functional as F
 
-from mlp_utils.layers import FastFeedForward
-from mlp_utils.layers.ngpt import NGPT, Scale, SwiGLU
+from mlp_utils.layers import FastFeedForward, FeedForward
+from mlp_utils.layers.ngpt import NGPT, Scale
 
 
 def test_ngpt_default_initialization() -> None:
@@ -13,7 +13,7 @@ def test_ngpt_default_initialization() -> None:
     ngpt_block = NGPT(dim=dim)
 
     assert ngpt_block is not None, "nGPT block should be initialized."
-    assert isinstance(ngpt_block.feedforward_net, SwiGLU), (
+    assert isinstance(ngpt_block.feedforward_net, FeedForward), (
         "Default feedforward net should be SwiGLU."
     )
     assert isinstance(ngpt_block.alpha_m, Scale), "alpha_m should be a Scale module."

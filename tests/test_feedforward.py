@@ -87,28 +87,4 @@ def test_feedforward_custom_norm_layer(input_tensor: torch.Tensor) -> None:
     ff(input_tensor)
 
 
-def test_proj_attribute_no_glu() -> None:
-    """Tests the proj attribute when no GLU variant is used."""
-    ff = FeedForward(dim=DIM_IN, mult=MULT, glu_variant="none")
-    assert ff.proj is ff.net[0]
-    assert isinstance(ff.proj, torch.nn.Linear)
-    assert ff.proj.in_features == DIM_IN
-    assert ff.proj.out_features == DIM_IN * MULT
 
-
-@pytest.mark.parametrize("glu_variant", list(set(ALL_GLU_VARIANTS) - {"none"}))
-def test_proj_attribute_with_glu(glu_variant: str) -> None:
-    """Tests the proj attribute when a GLU variant is used."""
-    ff = FeedForward(dim=DIM_IN, mult=MULT, glu_variant=glu_variant)
-    assert ff.proj is ff.net[0].proj
-    assert isinstance(ff.proj, torch.nn.Linear)
-    assert ff.proj.in_features == DIM_IN
-
-    hidden_dim = DIM_IN * MULT
-    # Most GLU variants project to double the hidden dimension for the gate and value
-    if "m" in glu_variant:  # Masked GLU
-        expected_out_features = hidden_dim
-    else:
-        expected_out_features = 2 * hidden_dim
-
-    assert ff.proj.out_features == expected_out_features

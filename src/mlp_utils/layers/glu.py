@@ -28,10 +28,10 @@ class _GLUBase(nn.Module):
         """Forward pass for the GLU.
 
         Args:
-            x (torch.Tensor): The input tensor.
+            x (torch.Tensor): The input tensor of shape (..., dim_in).
 
         Returns:
-            torch.Tensor: The output tensor.
+            torch.Tensor: The output tensor of shape (..., dim_out).
         """
         x, gate = self.proj(x).chunk(2, dim=-1)
         return x * self.activation(gate)
@@ -45,7 +45,11 @@ class GLU(_GLUBase):
 
 
 class Bilinear(_GLUBase):
-    """Gated Linear Unit with no activation."""
+    """Gated Linear Unit with no activation.
+
+    This results in a bilinear-like interaction (x * Wx), where one part
+    of the projection gates the other without a non-linearity.
+    """
 
     def __init__(self, dim_in: int, dim_out: int, bias: bool = True) -> None:
         super().__init__(dim_in, dim_out, nn.Identity(), bias=bias)
@@ -102,10 +106,10 @@ class _MGLUBase(nn.Module):
         """Forward pass for the MGLU.
 
         Args:
-            x (torch.Tensor): The input tensor.
+            x (torch.Tensor): The input tensor of shape (..., dim_in).
 
         Returns:
-            torch.Tensor: The output tensor.
+            torch.Tensor: The output tensor of shape (..., dim_out).
         """
         projected = self.proj(x)
 

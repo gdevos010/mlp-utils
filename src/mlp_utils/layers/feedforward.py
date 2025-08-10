@@ -112,7 +112,6 @@ class FeedForward(nn.Module):
                 nn.Dropout(dropout),
                 output_proj,
             )
-            self.proj = glu_layer.proj
         else:
             self.net = nn.Sequential(
                 nn.Linear(dim, hidden_dim),
@@ -121,22 +120,23 @@ class FeedForward(nn.Module):
                 nn.Linear(hidden_dim, dim),
             )
 
-            for name, module in self.net.named_modules():
-                if isinstance(module, nn.Linear):
-                    if name == "3":  # Last layer in the sequential
-                        initialize_weights(module, init_method="default", scale=0.1)
-                    else:
-                        initialize_weights(module, init_method="default")
-            self.proj = self.net[0]
+            # Initialize all Linear layers, scaling down the final projection.
+            # Robustly detect the last Linear layer instead of relying on module names.
+            linear_layers = [m for m in self.net.modules() if isinstance(m, nn.Linear)]
+            if linear_layers:
+                for layer in linear_layers[:-1]:
+                    initialize_weights(layer, init_method="default")
+                initialize_weights(linear_layers[-1], init_method="default", scale=0.1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
 
         Args:
-            x: Input tensor
+            x (torch.Tensor): Input tensor of shape (..., dim), where the last
+                dimension equals the configured ``dim`` for this module.
 
         Returns:
-            Output tensor
+            torch.Tensor: Output tensor of shape (..., dim).
         """
         if self.pre_norm is not None:
             x = self.pre_norm(x)

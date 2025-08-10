@@ -93,7 +93,7 @@ class FastFeedForward(nn.Module):
         self.depth = depth
         self.num_experts = 2**depth
         self.soft_routing_during_train = soft_routing_during_train
-        self.glu_variant = glu_variant
+        self.glu_variant = glu_variant.lower()
 
         if self.dim != self.expert_dim:
             self.project_in: nn.Module = nn.Linear(self.dim, self.expert_dim)
