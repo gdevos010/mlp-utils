@@ -19,8 +19,6 @@ def test_fastfeedforward_initialization() -> None:
     assert len(fff.experts) == 8, "Number of experts should be correct."
 
 
-
-
 def test_fastfeedforward_forward_pass_expert_dim() -> None:
     """Tests the forward pass of the FastFeedForward layer with expert dim."""
     batch_size = 4

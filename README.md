@@ -54,7 +54,7 @@ ffn = FeedForward(
 
 The `NGPT` class implements the feed-forward block from the paper ["nGPT: Normalized Transformer with Representation Learning on the Hypersphere."](https://arxiv.org/html/2410.01131v2).
 
-This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere. By default, it uses a `SwiGLU` feed-forward network with weight-normalized linear layers (`NormLinear`), making it a self-contained implementation of the nGPT MLP block.
+This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere. 
 
 You can use it as a standalone layer:
 

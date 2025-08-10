@@ -1,5 +1,7 @@
 """Implements a standardized MLP module."""
 
+from typing import Literal
+
 import torch
 
 from torch import nn
@@ -21,7 +23,7 @@ class MLP(nn.Module):
         use_norm: bool = True,
         norm_layer: type[nn.Module] = nn.RMSNorm,
         residual: bool = False,
-        pre_norm: bool = False,
+        norm_mode: Literal["pre", "post", "both", "none"] = "post",
     ) -> None:
         """Initializes the MLP module.
 
@@ -34,7 +36,10 @@ class MLP(nn.Module):
             use_norm: Whether to use normalization layers
             norm_layer: Normalization layer class to use
             residual: Whether to add a residual connection
-            pre_norm: Whether to apply normalization before or after the first linear layer
+            norm_mode: Where to apply normalization relative to the first linear layer. One of
+                "pre" (apply normalization to input), "post" (apply normalization after the first
+                linear layer), "both" (apply both pre and post), or "none" (no normalization). Ignored
+                if use_norm is False.
         """
         super().__init__()
 
@@ -52,13 +57,18 @@ class MLP(nn.Module):
         hidden_dim = self.input_dim * hidden_factor
         layers = []
 
+        # Determine effective normalization mode
+        effective_norm_mode: Literal["pre", "post", "both", "none"] = (
+            norm_mode if use_norm else "none"
+        )
+
         # Pre-normalization if enabled
-        if pre_norm and use_norm:
+        if effective_norm_mode in ("pre", "both"):
             layers.append(norm_layer(input_dim))
 
         # First linear layer and normalization
         layers.append(nn.Linear(self.input_dim, hidden_dim))
-        if use_norm and not pre_norm:
+        if effective_norm_mode in ("post", "both"):
             layers.append(norm_layer(hidden_dim))
 
         # Handle both class and instance activations
@@ -70,10 +80,8 @@ class MLP(nn.Module):
         if dropout > 0:
             layers.append(nn.Dropout(dropout))
 
-        # Output layer and normalization
+        # Output layer (no implicit normalization at the output; governed by norm_mode only)
         layers.append(nn.Linear(hidden_dim, self.output_dim))
-        if use_norm:
-            layers.append(norm_layer(self.output_dim))
 
         # Create the model
         self.model = nn.Sequential(*layers)
@@ -86,5 +94,12 @@ class MLP(nn.Module):
             self.model = ResidualWrapper(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for the MLP."""
+        """Forward pass for the MLP.
+
+        Args:
+            x: Tensor of shape (..., input_dim)
+
+        Returns:
+            Tensor of shape (..., output_dim)
+        """
         return self.model(x)

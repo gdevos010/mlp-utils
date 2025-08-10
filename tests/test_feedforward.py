@@ -85,6 +85,3 @@ def test_feedforward_custom_norm_layer(input_tensor: torch.Tensor) -> None:
     assert isinstance(ff.pre_norm, torch.nn.LayerNorm)
     # Check that it runs
     ff(input_tensor)
-
-
-

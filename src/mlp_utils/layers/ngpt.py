@@ -13,7 +13,6 @@ from torch import nn
 from torch.nn.utils.parametrize import register_parametrization
 
 from .feedforward import FeedForward
-from .glu import SwiGLU
 
 T = TypeVar("T")
 

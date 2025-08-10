@@ -15,9 +15,7 @@ from torch import nn
 
 def initialize_weights(  # noqa
     module: nn.Module,
-    init_method: Literal[
-        "default",  "gating", "embedding", "expert"
-    ] = "default",
+    init_method: Literal["default", "gating", "embedding", "expert"] = "default",
     nonlinearity: str = "relu",
     scale: float = 1.0,
     layer_name: str = "",
@@ -101,9 +99,7 @@ def initialize_weights(  # noqa
 
 def apply_initialization(
     model: nn.Module,
-    init_method: Literal[
-        "default", "gating", "embedding", "expert"
-    ] = "default",
+    init_method: Literal["default", "gating", "embedding", "expert"] = "default",
     nonlinearity: str = "relu",
     scale: float = 1.0,
 ) -> None:
@@ -123,7 +119,6 @@ def apply_initialization(
             scale=scale,
             layer_name=name,
         )
-
 
 
 def create_initializer(

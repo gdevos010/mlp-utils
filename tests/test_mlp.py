@@ -45,7 +45,7 @@ def test_mlp_residual_connection_no_wrapper_on_dim_mismatch() -> None:
 
 def test_mlp_pre_norm() -> None:
     """Tests the pre-normalization functionality."""
-    mlp = MLP(input_dim=64, pre_norm=True, use_norm=True)
+    mlp = MLP(input_dim=64, norm_mode="pre", use_norm=True)
     first_layer = list(mlp.model.children())[0]
     from torch.nn import RMSNorm
 
@@ -87,7 +87,7 @@ def test_mlp_no_norm_layer() -> None:
     """Tests that no norm layer is added when use_norm is False."""
     mlp_no_norm = MLP(input_dim=64, use_norm=False)
     has_norm = any(
-        isinstance(m, (torch.nn.RMSNorm, torch.nn.LayerNorm))
+        isinstance(m, torch.nn.RMSNorm | torch.nn.LayerNorm)
         for m in mlp_no_norm.model.modules()
     )
     assert not has_norm
@@ -126,7 +126,7 @@ def test_mlp_custom_act_fn_instance() -> None:
 
 def test_mlp_post_norm() -> None:
     """Tests the post-normalization (default) functionality."""
-    mlp = MLP(input_dim=64, pre_norm=False, use_norm=True)
+    mlp = MLP(input_dim=64, norm_mode="post", use_norm=True)
     layers = list(mlp.model.children())
     assert isinstance(layers[0], torch.nn.Linear)
     from torch.nn import RMSNorm
