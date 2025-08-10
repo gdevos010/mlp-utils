@@ -1,3 +1,4 @@
+import argparse
 import logging
 import time
 
@@ -9,6 +10,7 @@ from rich.logging import RichHandler
 from rich.table import Table
 from torch import nn
 
+from mlp_utils.activations import BSiLU, Gelu2, ReluNelu, ReluSquared
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.gmlp import GMLP
@@ -33,6 +35,8 @@ def get_model(config: dict) -> nn.Module:
     seq_len = config["seq_len"]
 
     if model_name == "mlp":
+        # Map legacy pre_norm flag to the new norm_mode API
+        norm_mode = "pre" if config.get("pre_norm", False) else "post"
         return MLP(
             input_dim=dim,
             output_dim=dim,
@@ -40,7 +44,7 @@ def get_model(config: dict) -> nn.Module:
             act_fn=config["act_fn"],
             residual=config.get("residual", False),
             use_norm=config.get("use_norm", True),
-            pre_norm=config.get("pre_norm", False),
+            norm_mode=norm_mode,
         )
     if model_name == "feedforward":
         return FeedForward(
@@ -174,6 +178,15 @@ def create_summary_table(results: list[dict]) -> Table:
 
 def main() -> None:
     """Runs the training experiment for a variety of model configurations."""
+    parser = argparse.ArgumentParser(description="Verify training across model groups")
+    parser.add_argument(
+        "--group",
+        choices=["all", "mlps", "ff"],
+        default="all",
+        help="Which group of models to run: all, mlps (only MLP variants), ff (feed-forward family)",
+    )
+    args = parser.parse_args()
+
     logging.basicConfig(
         level="INFO",
         format="%(message)s",
@@ -192,31 +205,31 @@ def main() -> None:
 
     configurations = [
         # MLP variants
-        # {"model_name": "mlp", "act_fn": nn.GELU},
-        # {"model_name": "mlp", "act_fn": nn.ReLU},
-        # {"model_name": "mlp", "act_fn": nn.SiLU},
-        # {"model_name": "mlp", "act_fn": ReluSquared},
-        # {"model_name": "mlp", "act_fn": Gelu2},
-        # {"model_name": "mlp", "act_fn": BSiLU},
-        # {"model_name": "mlp", "act_fn": ReluNelu()},
-        # # MLP parameter variants
-        # {"model_name": "mlp", "act_fn": nn.GELU, "residual": True},
-        # {"model_name": "mlp", "act_fn": nn.GELU, "use_norm": False},
-        # {"model_name": "mlp", "act_fn": nn.GELU, "pre_norm": True},
-        # # FeedForward variants (vanilla)
-        # {"model_name": "feedforward", "glu_variant": "none", "activation": nn.GELU},
-        # # FeedForward variants (GLU)
-        # {"model_name": "feedforward", "glu_variant": "glu"},
-        # {"model_name": "feedforward", "glu_variant": "swiglu"},
-        # {"model_name": "feedforward", "glu_variant": "geglu"},
-        # {"model_name": "feedforward", "glu_variant": "reglu"},
-        # {"model_name": "feedforward", "glu_variant": "bilinear"},
-        # # FeedForward variants (Masked GLU)
-        # {"model_name": "feedforward", "glu_variant": "mglu"},
-        # {"model_name": "feedforward", "glu_variant": "mswiglu"},
-        # {"model_name": "feedforward", "glu_variant": "mgeglu"},
-        # {"model_name": "feedforward", "glu_variant": "mreglu"},
-        # {"model_name": "feedforward", "glu_variant": "mbilinear"},
+        {"model_name": "mlp", "act_fn": nn.GELU},
+        {"model_name": "mlp", "act_fn": nn.ReLU},
+        {"model_name": "mlp", "act_fn": nn.SiLU},
+        {"model_name": "mlp", "act_fn": ReluSquared},
+        {"model_name": "mlp", "act_fn": Gelu2},
+        {"model_name": "mlp", "act_fn": BSiLU},
+        {"model_name": "mlp", "act_fn": ReluNelu()},
+        # MLP parameter variants
+        {"model_name": "mlp", "act_fn": nn.GELU, "residual": True},
+        {"model_name": "mlp", "act_fn": nn.GELU, "use_norm": False},
+        {"model_name": "mlp", "act_fn": nn.GELU, "pre_norm": True},
+        # FeedForward variants (vanilla)
+        {"model_name": "feedforward", "glu_variant": "none", "activation": nn.GELU},
+        # FeedForward variants (GLU)
+        {"model_name": "feedforward", "glu_variant": "glu"},
+        {"model_name": "feedforward", "glu_variant": "swiglu"},
+        {"model_name": "feedforward", "glu_variant": "geglu"},
+        {"model_name": "feedforward", "glu_variant": "reglu"},
+        {"model_name": "feedforward", "glu_variant": "bilinear"},
+        # FeedForward variants (Masked GLU)
+        {"model_name": "feedforward", "glu_variant": "mglu"},
+        {"model_name": "feedforward", "glu_variant": "mswiglu"},
+        {"model_name": "feedforward", "glu_variant": "mgeglu"},
+        {"model_name": "feedforward", "glu_variant": "mreglu"},
+        {"model_name": "feedforward", "glu_variant": "mbilinear"},
         # FastFeedForward variants
         {
             "model_name": "fastfeedforward",
@@ -270,6 +283,21 @@ def main() -> None:
             "ff_kwargs": {"mult": 2, "glu_variant": "geglu"},
         },
     ]
+
+    # Filter configurations by group selection
+    ff_family_names = {
+        "feedforward",
+        "fastfeedforward",
+        "pathweightedfff",
+        "switch_ffn",
+        "ngpt",
+    }
+    if args.group == "mlps":
+        configurations = [c for c in configurations if c["model_name"] == "mlp"]
+    elif args.group == "ff":
+        configurations = [
+            c for c in configurations if c["model_name"] in ff_family_names
+        ]
 
     results = []
     compile_mode = True
