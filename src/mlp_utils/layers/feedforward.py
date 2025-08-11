@@ -29,14 +29,14 @@ class FeedForward(nn.Module):
 
     Args:
         dim (int): Input and output feature dimension.
-        mult (int): Expansion factor for the hidden layer. Defaults to 4.
+        mult (int): Expansion factor for the hidden layer. Defaults to 2.
         dropout (float): Dropout probability applied after the gate or activation.
             Defaults to 0.0.
         activation (type[nn.Module]): Activation for the vanilla MLP path (ignored
             for GLU variants). Defaults to `nn.GELU`.
         glu_variant (Literal["none","glu","geglu","swiglu","reglu","bilinear",
             "mglu","mgeglu","mswiglu","mreglu","mbilinear"]): Selects the GLU
-            variant or a conventional MLP when "none". Defaults to "none".
+            variant or a conventional MLP when "none". Defaults to "swiglu".
         pre_norm (bool): If True, applies `norm_layer` before projections.
             Defaults to False.
         norm_layer (type[nn.Module]): Normalization layer class. Defaults to `nn.RMSNorm`.
@@ -45,7 +45,7 @@ class FeedForward(nn.Module):
     def __init__(
         self,
         dim: int,
-        mult: int = 4,
+        mult: int = 2,
         dropout: float = 0.0,
         activation: type[nn.Module] = nn.GELU,
         glu_variant: Literal[
@@ -60,7 +60,7 @@ class FeedForward(nn.Module):
             "mswiglu",
             "mreglu",
             "mbilinear",
-        ] = "none",
+        ] = "swiglu",
         pre_norm: bool = False,
         norm_layer: type[nn.Module] = nn.RMSNorm,
     ) -> None:

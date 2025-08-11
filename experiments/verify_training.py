@@ -65,7 +65,18 @@ def get_model(config: dict) -> nn.Module:
             feedforward_net=ff_net, dim=dim, scalar_alpha=config["scalar_alpha"]
         )
     if model_name == "gmlp":
-        return GMLP(dim=dim, dim_ff=dim * 4, seq_len=seq_len, depth=4)
+        gate_act = config.get("gate_activation")
+        if gate_act is not None and isinstance(gate_act, type):
+            gate_act = gate_act()
+        return GMLP(
+            dim=dim,
+            dim_ff=dim * 4,
+            seq_len=seq_len,
+            depth=4,
+            canonical_gate=config.get("canonical_gate", False),
+            drop_path=config.get("drop_path", 0.0),
+            gate_activation=gate_act,
+        )
     if model_name == "switch_ffn":
         return SwitchFFN(
             dim=dim,
@@ -269,8 +280,13 @@ def main() -> None:
         # nGPT variants
         {"model_name": "ngpt", "scalar_alpha": True},
         {"model_name": "ngpt", "scalar_alpha": False},
-        # gMLP
+        # gMLP (baseline + variants)
         {"model_name": "gmlp"},
+        {"model_name": "gmlp", "canonical_gate": True},
+        {"model_name": "gmlp", "drop_path": 0.1},
+        {"model_name": "gmlp", "gate_activation": nn.SiLU},
+        {"model_name": "gmlp", "canonical_gate": True, "gate_activation": nn.SiLU},
+        {"model_name": "gmlp", "canonical_gate": True, "drop_path": 0.1},
         # SwitchFFN variants
         {
             "model_name": "switch_ffn",

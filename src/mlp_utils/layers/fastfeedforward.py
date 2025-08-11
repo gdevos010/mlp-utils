@@ -23,11 +23,11 @@ class FastFeedForward(nn.Module):
         dim (int): Input and output model dimension.
         depth (int): Tree depth; number of experts is `2 ** depth`.
         expert_dim (int | None): Expert model dimension. Defaults to `dim`.
-        mult (int): Expansion factor for expert hidden layers. Defaults to 4.
+        mult (int): Expansion factor for expert hidden layers. Defaults to 2.
         dropout (float): Dropout probability inside experts. Defaults to 0.0.
         activation (type[nn.Module]): Activation for vanilla MLP experts. Defaults to `nn.GELU`.
         glu_variant (Literal["none","glu","geglu","swiglu","reglu","bilinear",
-            "mglu","mgeglu","mswiglu","mreglu","mbilinear"]): Expert type. Defaults to "none".
+            "mglu","mgeglu","mswiglu","mreglu","mbilinear"]): Expert type. Defaults to "swiglu".
         pre_norm (bool): Apply `norm_layer` before expert nets. Defaults to False.
         norm_layer (type[nn.Module]): Normalization class when `pre_norm` is True. Defaults to `nn.RMSNorm`.
         soft_routing_during_train (bool): Use differentiable soft routing while training. Defaults to True.
@@ -38,7 +38,7 @@ class FastFeedForward(nn.Module):
         dim: int,
         depth: int,
         expert_dim: int | None = None,
-        mult: int = 4,
+        mult: int = 2,
         dropout: float = 0.0,
         activation: type[nn.Module] = nn.GELU,
         glu_variant: Literal[
@@ -53,7 +53,7 @@ class FastFeedForward(nn.Module):
             "mswiglu",
             "mreglu",
             "mbilinear",
-        ] = "none",
+        ] = "swiglu",
         pre_norm: bool = False,
         norm_layer: type[nn.Module] = nn.RMSNorm,
         soft_routing_during_train: bool = True,
