@@ -6,9 +6,7 @@ A collection of utilities for multi-layer perceptron models.
 ## Installation
 
 ```bash
-
-pip install -e mlp-utils
-
+pip install -e ./mlp-utils
 ```
 
 ## Features
@@ -30,9 +28,21 @@ A collection of activation functions for MLPs.
 
 Utilities for initializing weights in neural network layers.
 
-- `initialize_weights`: Initializes weights of a module with strategies like "gating" or "feedforward".
+- `initialize_weights`: Initializes weights of a module with strategies like "default", "gating", "embedding", or "expert".
 - `apply_initialization`: Applies initialization to all modules in a model.
 - `create_initializer`: Creates a customized initializer function.
+
+```python
+from mlp_utils.layers.init_weights import (
+    initialize_weights,
+    apply_initialization,
+    create_initializer,
+)
+
+# Create and apply a reusable initializer
+initializer = create_initializer(init_method="default", nonlinearity="relu", scale=1.0)
+model.apply(initializer)
+```
 
 ### Layers
 
@@ -232,6 +242,7 @@ from mlp_utils.layers.gmlp import GMLP
 
 gmlp = GMLP(
     dim=256,
+    dim_ff=1024,
     seq_len=64,
     depth=6,
 )
@@ -241,9 +252,28 @@ gmlp = GMLP(
 
 - `L2Norm`: Normalizes a tensor to have a unit L2 norm along a given dimension.
 
+```python
+from mlp_utils import L2Norm
+
+norm = L2Norm(dim=-1)
+```
+
 #### Residual
 
 - `ResidualWrapper`: Adds a residual connection to any module.
+
+```python
+from mlp_utils.layers import ResidualWrapper
+import torch.nn as nn
+
+residual_mlp = ResidualWrapper(
+    nn.Sequential(
+        nn.Linear(256, 256),
+        nn.GELU(),
+        nn.Linear(256, 256),
+    )
+)
+```
 
 ### a not very accurate benchmark using toy dataset
 
