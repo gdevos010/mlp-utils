@@ -55,7 +55,7 @@ from mlp_utils.layers.feedforward import FeedForward
 
 ffn = FeedForward(
     dim=256,
-    mult=4,
+    mult=2,
     glu_variant="swiglu",
 )
 ```
