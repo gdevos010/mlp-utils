@@ -7,11 +7,11 @@ Use this as a living checklist while implementing `tversky.py`, tests, docs, and
 ---
 
 ### 1) Project scaffolding
-- [ ] Create `src/mlp_utils/layers/tversky.py` with module docstring, `__all__`, and imports only.
-- [ ] Add stubs for `tversky_similarity`, `pairwise_tversky`, `TverskyProjection` that raise `NotImplementedError`.
-- [ ] Update `src/mlp_utils/layers/__init__.py` to import and expose symbols.
-- [ ] Create `tests/test_tversky.py` with `pytest.skip("scaffold")` to avoid failures at start.
-- [ ] Sanity: `pytest -q` runs with 0 failures (skipped ok).
+- [x] Create `src/mlp_utils/layers/tversky.py` with module docstring, `__all__`, and imports only.
+- [x] Add stubs for `tversky_similarity`, `pairwise_tversky`, `TverskyProjection` that raise `NotImplementedError`.
+- [x] Update `src/mlp_utils/layers/__init__.py` to import and expose symbols.
+- [x] Create `tests/test_tversky.py` with `pytest.skip("scaffold")` to avoid failures at start.
+- [x] Sanity: `pytest -q` runs with 0 failures (skipped ok).
 
 Acceptance:
 - [ ] `from mlp_utils.layers import TverskyProjection` imports without side effects.
@@ -19,25 +19,25 @@ Acceptance:
 ---
 
 ### 2) Implement `tversky_similarity`
-- [ ] Signature: `tversky_similarity(input, prototype, alpha=0.5, beta=0.5, eps=1e-6, input_transform=None, nonnegative=True, smoothing_tau=None)`.
-- [ ] Implement input transform: support `None`, `"relu"`, `"clamp01"`, `"sigmoid"`, or callable; if set, it supersedes `nonnegative`.
-- [ ] Hard set-proxy ops by default using `torch.minimum` and `F.relu`.
-- [ ] Optional smoothing when `smoothing_tau>0`: soft-min for intersection (log-sum-exp) and `softplus(·/tau)` for differences.
-- [ ] Validate and error on invalid `smoothing_tau ≤ 0`.
-- [ ] Numerical stability: add `eps` to numerator and denominator; avoid NaN/Inf.
-- [ ] Full type hints and a docstring including the similarity formula and semantics.
+- [x] Signature: `tversky_similarity(input, prototype, alpha=0.5, beta=0.5, eps=1e-6, input_transform=None, nonnegative=True, smoothing_tau=None)`.
+- [x] Implement input transform: support `None`, `"relu"`, `"clamp01"`, `"sigmoid"`, or callable; if set, it supersedes `nonnegative`.
+- [x] Hard set-proxy ops by default using `torch.minimum` and `F.relu`.
+- [x] Optional smoothing when `smoothing_tau>0`: soft-min for intersection (log-sum-exp) and `softplus(·/tau)` for differences.
+- [x] Validate and error on invalid `smoothing_tau ≤ 0`.
+- [x] Numerical stability: add `eps` to numerator and denominator; avoid NaN/Inf.
+- [x] Full type hints and a docstring including the similarity formula and semantics.
 
 Tests (unit):
-- [ ] Identity/self-similarity: `S(x,x) ≈ 1` for random `x ≥ 0`; `x=0` edge-case → `1`.
-- [ ] Asymmetry: `alpha ≠ beta` yields `S(x,y) ≠ S(y,x)` on a non-symmetric pair.
+- [x] Identity/self-similarity: `S(x,x) ≈ 1` for random `x ≥ 0`; `x=0` edge-case → `1`.
+- [x] Asymmetry: `alpha ≠ beta` yields `S(x,y) ≠ S(y,x)` on a non-symmetric pair.
 - [ ] Monotonicity: increased overlap raises similarity; verify ordering on controlled vectors.
-- [ ] Range/boundedness: for nonnegative inputs and defaults, `S ∈ (0,1]` (also with smoothing).
-- [ ] Input transforms: `relu` parity, `clamp01` range enforcement, `sigmoid` transform; callable support.
+- [x] Range/boundedness: for nonnegative inputs and defaults, `S ∈ (0,1]` (also with smoothing).
+- [x] Input transforms: `relu` parity, `clamp01` range enforcement, `sigmoid` transform; callable support.
 - [ ] Smoothing extremes: `tau→0` approximates hard ops within tolerance; stable for moderate `tau`.
 - [ ] Numerical stability: zero vectors, disjoint vectors, large values → finite outputs.
 - [ ] Gradients: `autograd.gradcheck` (double precision, small random positive inputs) passes.
-- [ ] Dtype/device: CPU `float32`/`float64` equivalence within tolerance.
-- [ ] Error handling: invalid `smoothing_tau` and unknown `input_transform` raise `ValueError`.
+- [x] Dtype/device: CPU `float32`/`float64` equivalence within tolerance.
+- [x] Error handling: invalid `smoothing_tau` and unknown `input_transform` raise `ValueError`.
 
 ---
 
