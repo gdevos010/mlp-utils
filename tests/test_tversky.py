@@ -5,11 +5,13 @@ from typing import Callable
 
 import pytest
 import torch
+import torch.nn.functional as F
 
 from mlp_utils.layers import (
     TverskyProjection,
     pairwise_tversky,
     tversky_similarity,
+    tversky_attributions,
 )
 
 
@@ -148,3 +150,106 @@ def test_jit_trace_forward() -> None:
     y_traced = traced(x)
     y_eager = layer(x)
     assert torch.allclose(y_traced, y_eager, rtol=1e-6, atol=1e-6)
+
+
+def test_monotonicity_in_shared_mass() -> None:
+    torch.manual_seed(9)
+    D = 10
+    y = F.relu(torch.randn(D))
+    x1 = F.relu(torch.randn(D))
+    # Increase overlap only where x1 <= y so A_only does not increase
+    delta = 0.5 * torch.relu(y - x1)
+    x2 = x1 + delta  # ensures x2 <= x1 + (y - x1) = y
+    s1 = tversky_similarity(x1, y)
+    s2 = tversky_similarity(x2, y)
+    assert s2.item() >= s1.item() - 1e-7
+
+
+def test_smoothing_tau_approaches_hard_ops() -> None:
+    torch.manual_seed(10)
+    x = torch.rand(6, 13)
+    y = torch.rand(6, 13)
+    s_hard = tversky_similarity(x, y)
+    s_soft = tversky_similarity(x, y, smoothing_tau=1e-3)
+    assert torch.allclose(s_soft, s_hard, rtol=1e-3, atol=1e-4)
+
+
+def test_numerical_stability_various_inputs() -> None:
+    zero = torch.zeros(5, 7)
+    disjoint_a = F.relu(torch.randn(5, 7))
+    disjoint_b = F.relu(torch.randn(5, 7)) + 5.0  # likely disjoint mass
+    large = torch.rand(5, 7) * 1e6
+    pairs = [
+        (zero, zero),
+        (disjoint_a, disjoint_b),
+        (large, large * 0.5),
+    ]
+    for a, b in pairs:
+        s = tversky_similarity(a, b)
+        assert torch.isfinite(s).all()
+        assert (s >= 0).all() and (s <= 1 + 1e-7).all()
+
+
+@pytest.mark.slow
+def test_gradcheck_tversky_similarity() -> None:
+    torch.manual_seed(11)
+    x = torch.rand(4, dtype=torch.float64, requires_grad=True) * 0.9 + 0.1
+    y = torch.rand(4, dtype=torch.float64, requires_grad=True) * 0.9 + 0.1
+
+    def fn(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return tversky_similarity(a, b).sum()
+
+    assert torch.autograd.gradcheck(fn, (x, y), eps=1e-6, atol=1e-4, rtol=1e-3)
+
+
+def test_attributions_shapes_and_sums() -> None:
+    torch.manual_seed(12)
+    x = torch.rand(3, 8)
+    p = torch.rand(8)
+    I_c, A_c, B_c = tversky_attributions(x, p)
+    assert I_c.shape == x.shape
+    assert A_c.shape == x.shape
+    assert B_c.shape == x.shape
+    # Consistency with internal aggregation
+    I = I_c.sum(dim=-1)
+    A = A_c.sum(dim=-1)
+    B = B_c.sum(dim=-1)
+    s = (I + 1e-6) / (I + 0.5 * A + 0.5 * B + 1e-6)
+    s_ref = tversky_similarity(x, p)
+    assert torch.allclose(s, s_ref, rtol=1e-5, atol=1e-6)
+
+
+def test_attributions_smoothed_and_nonnegativity() -> None:
+    torch.manual_seed(13)
+    x = torch.randn(5, 6)
+    p = torch.randn(6)
+    I_c, A_c, B_c = tversky_attributions(x, p, input_transform="relu", smoothing_tau=0.2)
+    assert torch.isfinite(I_c).all() and torch.isfinite(A_c).all() and torch.isfinite(B_c).all()
+    assert (I_c >= 0).all() and (A_c >= 0).all() and (B_c >= 0).all()
+
+
+def test_learnable_alpha_beta_and_normalization() -> None:
+    torch.manual_seed(14)
+    in_dim, out_dim = 6, 4
+    # Learnable without normalization
+    layer = TverskyProjection(in_dim, out_dim, learnable_alpha=True, learnable_beta=True)
+    # Parameters should include unconstrained vars
+    params = dict(layer.named_parameters())
+    assert any("_alpha_unconstrained" in k for k in params)
+    assert any("_beta_unconstrained" in k for k in params)
+
+    x = torch.rand(3, in_dim)
+    y = layer(x)
+    assert y.shape == (3, out_dim)
+
+    # With normalization, α+β ≈ 1
+    layer2 = TverskyProjection(
+        in_dim,
+        out_dim,
+        learnable_alpha=True,
+        learnable_beta=True,
+        alpha_beta_normalize=True,
+    )
+    with torch.no_grad():
+        a_b_sum = layer2._compute_alpha_beta()[0] + layer2._compute_alpha_beta()[1]
+    assert math.isclose(float(a_b_sum.item()), 1.0, rel_tol=1e-3, abs_tol=1e-3)

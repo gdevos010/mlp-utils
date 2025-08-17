@@ -19,4 +19,9 @@ from .ngpt import NGPT
 from .pathweightedfff import PathWeightedFFF
 from .residual import ResidualWrapper
 from .switch_ffn import SwitchFFN
-from .tversky import TverskyProjection, pairwise_tversky, tversky_similarity
+from .tversky import (
+    TverskyProjection,
+    pairwise_tversky,
+    tversky_attributions,
+    tversky_similarity,
+)

@@ -25,6 +25,7 @@ __all__ = [
     "tversky_similarity",
     "pairwise_tversky",
     "TverskyProjection",
+    "tversky_attributions",
 ]
 
 
@@ -176,6 +177,91 @@ def pairwise_tversky(  # noqa: PLR0913
     return sims
 
 
+def tversky_attributions(
+    input: torch.Tensor,  # noqa: A002
+    prototype: torch.Tensor,
+    *,
+    input_transform: str | Callable[[torch.Tensor], torch.Tensor] | None = None,
+    nonnegative: bool = True,
+    smoothing_tau: float | None = None,
+    # alpha/beta are not used to compute components themselves; they are included for API symmetry
+    alpha: float = 0.5,
+    beta: float = 0.5,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return per-feature contributions for intersection and distinctive parts.
+
+    Returns three tensors of the same shape as ``input`` (broadcasted against
+    ``prototype``) corresponding to elementwise contributions whose sums across
+    the last dimension yield the aggregate terms used by :func:`tversky_similarity`.
+
+    Args:
+        input: Tensor of shape ``[..., D]``.
+        prototype: Tensor of shape broadcastable to ``[..., D]``.
+        input_transform: Optional transform (``None``, ``"relu"``, ``"clamp01``,
+            ``"sigmoid"`` or a callable).
+        nonnegative: If True and no explicit transform is provided, clamp to nonnegative.
+        smoothing_tau: If provided (>0), use smooth proxies matching
+            :func:`tversky_similarity`.
+        alpha: Unused parameter; included for API symmetry.
+        beta: Unused parameter; included for API symmetry.
+
+    Returns:
+        Tuple ``(i_components, a_components, b_components)`` each of shape ``[..., D]``.
+    """
+    if smoothing_tau is not None and smoothing_tau <= 0:
+        raise ValueError(
+            f"smoothing_tau must be > 0 when provided, got {smoothing_tau}"
+        )
+
+    # Apply same preprocessing as similarity, minimizing branches for lint friendliness
+    if input_transform is None:
+        if nonnegative:
+            x = F.relu(input)
+            y = F.relu(prototype)
+        else:
+            x = input
+            y = prototype
+    elif isinstance(input_transform, str):
+        transforms: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
+            "relu": F.relu,
+            "clamp01": lambda t: torch.clamp(t, 0.0, 1.0),
+            "sigmoid": torch.sigmoid,
+        }
+        try:
+            transform_fn = transforms[input_transform]
+        except KeyError as exc:  # noqa: PERF203 (clarity)
+            raise ValueError(
+                f"Unknown input_transform: {input_transform!r}. "
+                "Expected one of 'relu', 'clamp01', 'sigmoid', or a callable."
+            ) from exc
+        x = transform_fn(input)
+        y = transform_fn(prototype)
+    elif callable(input_transform):
+        x = input_transform(input)
+        y = input_transform(prototype)
+    else:
+        raise ValueError(
+            "input_transform must be None, a recognized string, or a callable"
+        )
+
+    if smoothing_tau is None:
+        i_components = torch.minimum(x, y)
+        a_components = F.relu(x - y)
+        b_components = F.relu(y - x)
+    else:
+        tau = float(smoothing_tau)
+        # Ensure broadcasted shapes align before stacking
+        x_b, y_b = torch.broadcast_tensors(x, y)
+        stacked = torch.stack((x_b, y_b), dim=-1)  # (..., D, 2)
+        soft_min = -tau * torch.logsumexp(-stacked / tau, dim=-1)
+        # Shift so that for nonnegative inputs, components remain nonnegative
+        i_components = soft_min + tau * math.log(2.0)
+        a_components = tau * F.softplus((x_b - y_b) / tau)
+        b_components = tau * F.softplus((y_b - x_b) / tau)
+
+    return i_components, a_components, b_components
+
+
 class TverskyProjection(nn.Module):
     """Projection layer using Tversky similarity against learned prototypes.
 
@@ -216,10 +302,9 @@ class TverskyProjection(nn.Module):
     ) -> None:
         super().__init__()
 
-        if learnable_alpha or learnable_beta:
-            raise NotImplementedError(
-                "Learnable alpha/beta are planned in a later step (see plan.md)."
-            )
+        # Store configuration flags
+        self.learnable_alpha = bool(learnable_alpha)
+        self.learnable_beta = bool(learnable_beta)
 
         # Parameters: weight and optional bias
         self.weight = nn.Parameter(torch.empty(output_dim, input_dim))
@@ -228,13 +313,26 @@ class TverskyProjection(nn.Module):
         else:
             self.bias = None
 
-        # Register fixed alpha/beta/eps as buffers so module.to(device) moves them
+        # Register eps so module.to(device) moves it
         default_dtype = torch.get_default_dtype()
-        self.register_buffer("alpha", torch.tensor(float(alpha), dtype=default_dtype))
-        self.register_buffer("beta", torch.tensor(float(beta), dtype=default_dtype))
         self.register_buffer("eps", torch.tensor(float(eps), dtype=default_dtype))
 
-        # Store configuration flags
+        # Alpha/Beta either as learnable parameters (unconstrained) or fixed buffers
+        if self.learnable_alpha:
+            self._alpha_unconstrained = nn.Parameter(
+                torch.tensor(_softplus_inverse(float(alpha)), dtype=default_dtype)
+            )
+        else:
+            self.register_buffer(
+                "alpha", torch.tensor(float(alpha), dtype=default_dtype)
+            )
+        if self.learnable_beta:
+            self._beta_unconstrained = nn.Parameter(
+                torch.tensor(_softplus_inverse(float(beta)), dtype=default_dtype)
+            )
+        else:
+            self.register_buffer("beta", torch.tensor(float(beta), dtype=default_dtype))
+
         self.input_transform = input_transform
         self.nonnegative = bool(nonnegative)
         self.smoothing_tau = float(smoothing_tau) if smoothing_tau is not None else None
@@ -254,11 +352,12 @@ class TverskyProjection(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
         """Forward pass (scaffold)."""
+        alpha, beta = self._compute_alpha_beta()
         sims = pairwise_tversky(
             x,
             self.weight,
-            alpha=float(self.alpha.item()),
-            beta=float(self.beta.item()),
+            alpha=float(alpha.item()),
+            beta=float(beta.item()),
             eps=float(self.eps.item()),
             input_transform=self.input_transform,
             nonnegative=self.nonnegative,
@@ -269,3 +368,35 @@ class TverskyProjection(nn.Module):
         if self.temperature is not None:
             sims = sims * self.temperature
         return sims
+
+    def _compute_alpha_beta(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return current positive (and optionally normalized) alpha and beta.
+
+        When learnable, maps unconstrained parameters through softplus to ensure
+        positivity, and optionally normalizes so that alpha + beta = 1.
+        """
+        if self.learnable_alpha:
+            alpha_pos = F.softplus(self._alpha_unconstrained)
+        else:
+            alpha_pos = self.alpha
+        if self.learnable_beta:
+            beta_pos = F.softplus(self._beta_unconstrained)
+        else:
+            beta_pos = self.beta
+
+        if self.alpha_beta_normalize:
+            denom = alpha_pos + beta_pos
+            # denom should be > 0 due to softplus or positive buffers; guard anyway
+            alpha_pos = alpha_pos / denom
+            beta_pos = beta_pos / denom
+        return alpha_pos, beta_pos
+
+
+def _softplus_inverse(y: float) -> float:
+    """Approximate inverse of softplus for positive y.
+
+    Returns value z such that softplus(z) ~= y. For y>0, a good approximation is
+    log(exp(y) - 1).
+    """
+    # Using expm1 improves numerical stability for small y.
+    return math.log(math.expm1(y))

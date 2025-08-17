@@ -48,4 +48,9 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--color=yes",
+    "-m",
+    "not slow",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m not slow')",
 ]

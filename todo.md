@@ -30,12 +30,12 @@ Acceptance:
 Tests (unit):
 - [x] Identity/self-similarity: `S(x,x) ≈ 1` for random `x ≥ 0`; `x=0` edge-case → `1`.
 - [x] Asymmetry: `alpha ≠ beta` yields `S(x,y) ≠ S(y,x)` on a non-symmetric pair.
-- [ ] Monotonicity: increased overlap raises similarity; verify ordering on controlled vectors.
+- [x] Monotonicity: increased overlap raises similarity; verify ordering on controlled vectors.
 - [x] Range/boundedness: for nonnegative inputs and defaults, `S ∈ (0,1]` (also with smoothing).
 - [x] Input transforms: `relu` parity, `clamp01` range enforcement, `sigmoid` transform; callable support.
-- [ ] Smoothing extremes: `tau→0` approximates hard ops within tolerance; stable for moderate `tau`.
-- [ ] Numerical stability: zero vectors, disjoint vectors, large values → finite outputs.
-- [ ] Gradients: `autograd.gradcheck` (double precision, small random positive inputs) passes.
+- [x] Smoothing extremes: `tau→0` approximates hard ops within tolerance; stable for moderate `tau`.
+- [x] Numerical stability: zero vectors, disjoint vectors, large values → finite outputs.
+- [x] Gradients: `autograd.gradcheck` (double precision, small random positive inputs) passes.
 - [x] Dtype/device: CPU `float32`/`float64` equivalence within tolerance.
 - [x] Error handling: invalid `smoothing_tau` and unknown `input_transform` raise `ValueError`.
 
@@ -57,8 +57,8 @@ Tests (unit):
 ### 4) Implement `TverskyProjection` layer
 - [x] Constructor: `TverskyProjection(input_dim, output_dim, alpha=0.5, beta=0.5, eps=1e-6, bias=False, input_transform=None, nonnegative=True, smoothing_tau=None, learnable_alpha=False, learnable_beta=False, alpha_beta_normalize=False, temperature=None)`.
 - [x] Parameters: `weight` shape `[out,in]`; optional `bias` shape `[out]` (default off to preserve `(0,1]`).
-- [ ] α/β handling: buffers by default; if learnable, register unconstrained params mapped via softplus to positive α/β.
-- [ ] Optional `alpha_beta_normalize=True`: renormalize α and β so `α+β=1`.
+- [x] α/β handling: buffers by default; if learnable, register unconstrained params mapped via softplus to positive α/β.
+- [x] Optional `alpha_beta_normalize=True`: renormalize α and β so `α+β=1`.
 - [x] Forward: compute `pairwise_tversky(x, weight, ...)`, add optional bias, apply optional temperature scaling; preserve leading batch dims.
 - [x] Register buffers and dtypes/devices properly; ensure `.to(device)` moves α/β.
 - [x] Range semantics note in docstring: bias/temperature break strict `(0,1]` interpretation.
@@ -66,7 +66,7 @@ Tests (unit):
 Tests (module):
 - [x] Parameter shapes and registration (`weight`, `bias` when enabled).
 - [x] Forward shape preserved; values in `(0,1]` for defaults and nonnegative inputs.
-- [ ] Learnable α/β positivity (softplus) and optional normalization (`≈1` sum).
+- [x] Learnable α/β positivity (softplus) and optional normalization (`≈1` sum).
 - [x] Training step reduces a simple loss; gradient flows to `weight` and learnable α/β if enabled.
 - [x] `state_dict` save/load roundtrip yields identical outputs.
 - [x] JIT/compile: `torch.jit.script` or `trace` forward works; optionally `torch.compile` if available.
@@ -74,14 +74,14 @@ Tests (module):
 ---
 
 ### 5) Implement `tversky_attributions` utility
-- [ ] Function returns per-feature contributions for intersection and distinctive parts consistent with `tversky_similarity`.
-- [ ] Works with both hard and smoothed proxies; respects `input_transform`.
-- [ ] Clear docstring explaining outputs and intended visualization.
+- [x] Function returns per-feature contributions for intersection and distinctive parts consistent with `tversky_similarity`.
+- [x] Works with both hard and smoothed proxies; respects `input_transform`.
+- [x] Clear docstring explaining outputs and intended visualization.
 
 Tests (utility):
-- [ ] Shapes match input feature dimension.
-- [ ] Nonnegativity of contributions under nonnegative inputs.
-- [ ] Sum of components equals aggregate terms used in similarity calculation (within tolerance for smoothing).
+- [x] Shapes match input feature dimension.
+- [x] Nonnegativity of contributions under nonnegative inputs.
+- [x] Sum of components equals aggregate terms used in similarity calculation (within tolerance for smoothing).
 
 ---
 
