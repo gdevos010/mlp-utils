@@ -355,6 +355,25 @@ x = torch.rand(4, 16)  # nonnegative inputs keep outputs in (0, 1]
 y = proj(x)            # shape: [4, 8]
 ```
 
+Notes:
+- The projection computes per-prototype similarities in (0, 1] when inputs are nonnegative and `bias=False`.
+- Enabling `bias=True` and/or a non-unit `temperature` (see the layer's arguments) changes the range semantics by applying affine/scale transforms to the similarity.
+- You can inspect per-feature contributions using `tversky_attributions` to visualize which dimensions increase the intersection term and which contribute to distinctive parts.
+
+Example attributions:
+
+```python
+from mlp_utils.layers import tversky_attributions
+import torch
+
+x = torch.rand(3, 8)
+p = torch.rand(8)
+# Returns three tensors whose sums along the last dim match the similarity's components
+I_components, A_components, B_components = tversky_attributions(x, p, input_transform="relu")
+```
+
+Example script: a tiny XOR demo with `TverskyProjection` is available at `experiments/tversky_xor.py`.
+
 ```bibtex
 @inproceedings{Horuz2025TheRO,
     title   = {The Resurrection of the ReLU},

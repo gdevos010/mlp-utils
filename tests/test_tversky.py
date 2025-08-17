@@ -165,6 +165,21 @@ def test_monotonicity_in_shared_mass() -> None:
     assert s2.item() >= s1.item() - 1e-7
 
 
+def test_sequential_integration_forward_backward() -> None:
+    torch.manual_seed(15)
+    in_dim, out_dim = 6, 3
+    model = torch.nn.Sequential(
+        TverskyProjection(in_dim, out_dim),
+        torch.nn.Softmax(dim=-1),
+    )
+    x = torch.rand(5, in_dim, requires_grad=True)
+    y = model(x)
+    loss = y.sum()
+    loss.backward()
+    proj: TverskyProjection = model[0]  # type: ignore[assignment]
+    assert proj.weight.grad is not None and torch.isfinite(proj.weight.grad).all()
+
+
 def test_smoothing_tau_approaches_hard_ops() -> None:
     torch.manual_seed(10)
     x = torch.rand(6, 13)
@@ -188,6 +203,39 @@ def test_numerical_stability_various_inputs() -> None:
         s = tversky_similarity(a, b)
         assert torch.isfinite(s).all()
         assert (s >= 0).all() and (s <= 1 + 1e-7).all()
+
+
+@pytest.mark.slow
+def test_xor_training_high_accuracy() -> None:
+    torch.manual_seed(1234)
+    X = torch.tensor(
+        [
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+        ]
+    )
+    Y = torch.tensor([0, 1, 1, 0])
+    X = X.repeat(32, 1)
+    Y = Y.repeat(32)
+
+    model = torch.nn.Sequential(
+        TverskyProjection(2, 2, input_transform="clamp01", nonnegative=True),
+    )
+    opt = torch.optim.SGD(model.parameters(), lr=0.5)
+
+    for _ in range(200):
+        logits = model(X)
+        loss = torch.nn.functional.cross_entropy(logits, Y)
+        opt.zero_grad(set_to_none=True)
+        loss.backward()
+        opt.step()
+
+    with torch.no_grad():
+        preds = model(X).argmax(dim=-1)
+        acc = (preds == Y).float().mean().item()
+    assert acc >= 0.9
 
 
 @pytest.mark.slow

@@ -86,19 +86,19 @@ Tests (utility):
 ---
 
 ### 6) Integration and demos
-- [ ] Mini model: `nn.Sequential(TverskyProjection, nn.Softmax)` runs forward/backward on random tensors; gradients propagate.
-- [ ] XOR example: `experiments/tversky_xor.py` with 2D inputs and `output_dim=2`, fixed seeds, quick CPU run (<5s), prints loss/accuracy.
+- [x] Mini model: `nn.Sequential(TverskyProjection, nn.Softmax)` runs forward/backward on random tensors; gradients propagate.
+- [x] XOR example: `experiments/tversky_xor.py` with 2D inputs and `output_dim=2`, fixed seeds, quick CPU run (<5s), prints loss/accuracy.
 
 Tests (integration):
-- [ ] Tiny training loop reduces loss and achieves high accuracy (>90%) deterministically.
+- [x] Tiny training loop reduces loss and achieves high accuracy (>90%) deterministically.
 
 ---
 
 ### 7) Documentation
-- [ ] Update `README.md` Layers section with `TverskyProjection` synopsis, construction snippet, and example forward pass.
-- [ ] Add notes on similarity range semantics, bias/temperature effects, and interpretability.
-- [ ] Link to paper: `[arXiv:2506.11035](https://arxiv.org/abs/2506.11035)`.
-- [ ] Ensure docstrings include parameter meaning and equations where helpful.
+- [x] Update `README.md` Layers section with `TverskyProjection` synopsis, construction snippet, and example forward pass.
+- [x] Add notes on similarity range semantics, bias/temperature effects, and interpretability.
+- [x] Link to paper: `[arXiv:2506.11035](https://arxiv.org/abs/2506.11035)`.
+- [x] Ensure docstrings include parameter meaning and equations where helpful.
 
 Acceptance:
 - [ ] README snippet imports and runs in a local Python shell.
