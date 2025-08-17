@@ -1,3 +1,6 @@
+# ABOUTME: Benchmarks inference speed of several FeedForward-family modules.
+# ABOUTME: Prints rich tables comparing average forward-pass times per model.
+
 """A small experiment to verify the inference speed of FastFeedForward."""
 
 import time
@@ -11,6 +14,10 @@ from torch import nn
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.pathweightedfff import PathWeightedFFF
+
+# Lint constants (avoid magic numbers in comparisons)
+PARAM_MILLION = 1_000_000
+PARAM_THOUSAND = 1_000
 
 
 def benchmark_model(
@@ -48,12 +55,12 @@ def benchmark_model(
 def get_model_size(model: nn.Module) -> str:
     """Calculates the number of parameters in a model and returns a formatted string."""
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    if num_params >= 1_000_000:
-        return f"{num_params / 1_000_000:.2f}M"
-    return f"{num_params / 1_000:.2f}K"
+    if num_params >= PARAM_MILLION:
+        return f"{num_params / PARAM_MILLION:.2f}M"
+    return f"{num_params / PARAM_THOUSAND:.2f}K"
 
 
-def run_benchmark(device: str, console: Console) -> None:
+def run_benchmark(device: str, console: Console) -> None:  # noqa: PLR0915
     """Runs the benchmark on a specific device and prints the results."""
     console.print(
         f"\n[bold green]--- Running Benchmark on {device.upper()} ---[/bold green]"

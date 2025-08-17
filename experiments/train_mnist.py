@@ -1,3 +1,6 @@
+# ABOUTME: Trains MNIST with multiple MLP-family backbones and reports metrics.
+# ABOUTME: Supports early stopping and optional parameter budget targeting.
+
 """MNIST training runner for MLP-family variants.
 
 This script trains multiple backbone variants from `mlp_utils` on the MNIST
@@ -25,6 +28,7 @@ import re
 import time
 
 from dataclasses import dataclass
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -34,6 +38,13 @@ from rich.logging import RichHandler
 from rich.table import Table
 from torch import Tensor, nn
 from torch.utils.data import DataLoader, random_split
+
+# Data pipeline
+# Inputs: images [B, 1, 28, 28], labels [B]
+from torchvision import (
+    datasets,
+    transforms,
+)  # Imported here to avoid hard dependency on import-time
 
 # Backbones and utilities (kept consistent with verify_training.py)
 from mlp_utils.activations import BSiLU, Gelu2, ReluNelu, ReluSquared
@@ -104,10 +115,10 @@ def patchify_images(images: Tensor, patch_size: int) -> Tensor:
         patches: Flattened patches of shape [B, S, P^2], where S = (28 / P)^2.
     """
     if (
-        images.ndim != 4
-        or images.shape[1] != 1
-        or images.shape[2] != 28
-        or images.shape[3] != 28
+        images.ndim != 4  # noqa: PLR2004
+        or images.shape[1] != 1  # noqa: PLR2004
+        or images.shape[2] != 28  # noqa: PLR2004
+        or images.shape[3] != 28  # noqa: PLR2004
     ):
         raise ValueError(
             f"Expected images with shape [B, 1, 28, 28], got {tuple(images.shape)}"
@@ -149,7 +160,11 @@ class MNISTClassifier(nn.Module):
     """
 
     def __init__(
-        self, backbone: nn.Module, dim: int, patch_size: int, num_classes: int = 10
+        self,
+        backbone: nn.Module,
+        dim: int,
+        patch_size: int,
+        num_classes: int = 10,
     ) -> None:
         super().__init__()
         self.backbone = backbone
@@ -184,7 +199,7 @@ class MNISTClassifier(nn.Module):
         return logits
 
 
-def get_model(config: dict) -> nn.Module:
+def get_model(config: dict) -> nn.Module:  # noqa: PLR0911
     """Instantiates a backbone model based on the provided configuration.
 
     The returned module consumes sequences of shape [B, S, D] and returns
@@ -203,7 +218,9 @@ def get_model(config: dict) -> nn.Module:
     seq_len = config["seq_len"]
 
     if model_name == "mlp":
-        norm_mode = "pre" if config.get("pre_norm", False) else "post"
+        norm_mode: Literal["pre", "post", "both", "none"] = (
+            "pre" if config.get("pre_norm", False) else "post"
+        )
         return MLP(
             input_dim=dim,
             output_dim=dim,
@@ -272,9 +289,9 @@ def get_model_size(module: nn.Module) -> str:
         Human-readable parameter count, e.g., "33.41K" or "1.23M".
     """
     num_params = sum(p.numel() for p in module.parameters() if p.requires_grad)
-    if num_params >= 1_000_000:
+    if num_params >= 1_000_000:  # noqa: PLR2004
         return f"{num_params / 1e6:.2f}M"
-    if num_params >= 1_000:
+    if num_params >= 1_000:  # noqa: PLR2004
         return f"{num_params / 1e3:.2f}K"
     return str(num_params)
 
@@ -288,9 +305,9 @@ def format_param_count(count: int) -> str:
     Returns:
         String like "33.41K" or "1.23M".
     """
-    if count >= 1_000_000:
+    if count >= 1_000_000:  # noqa: PLR2004
         return f"{count / 1e6:.2f}M"
-    if count >= 1_000:
+    if count >= 1_000:  # noqa: PLR2004
         return f"{count / 1e3:.2f}K"
     return str(int(count))
 
@@ -322,8 +339,8 @@ def parse_param_budgets(budgets_arg: str) -> list[int]:
     if not budgets_arg:
         return []
     budgets: list[int] = []
-    for token in budgets_arg.split(","):
-        token = token.strip()
+    for raw_token in budgets_arg.split(","):
+        token = raw_token.strip()
         if not token:
             continue
         m = re.fullmatch(r"(?i)\s*([0-9]*\.?[0-9]+)\s*([kKmM]?)\s*", token)
@@ -339,14 +356,14 @@ def parse_param_budgets(budgets_arg: str) -> list[int]:
     return budgets
 
 
-def estimate_dim_for_budget(
+def estimate_dim_for_budget(  # noqa: C901, PLR0915
     base_config: dict,
     variant_config: dict,
     target_params: int,
     tolerance: float = 0.05,
     min_dim: int = 4,
     max_dim: int = 2048,
-) -> tuple[int, int]:
+) -> tuple[int, int]:  # noqa: C901, PLR0915
     """Finds a `dim` that approximately matches a parameter budget.
 
     The search constructs the `MNISTClassifier` with the given variant and
@@ -468,16 +485,16 @@ def train_one_epoch(
     num_batches = 0
 
     for step, (images, targets) in enumerate(dataloader):
-        images = images.to(device, non_blocking=True)
-        targets = targets.to(device, non_blocking=True)
+        images_dev = images.to(device, non_blocking=True)
+        targets_dev = targets.to(device, non_blocking=True)
 
-        outputs = model(images)
+        outputs = model(images_dev)
         if isinstance(outputs, tuple):
             logits, aux_loss = outputs
-            loss = loss_fn(logits, targets) + aux_loss
+            loss = loss_fn(logits, targets_dev) + aux_loss
         else:
             logits = outputs
-            loss = loss_fn(logits, targets)
+            loss = loss_fn(logits, targets_dev)
 
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -518,20 +535,20 @@ def evaluate(
     total_examples = 0
 
     for images, targets in dataloader:
-        images = images.to(device, non_blocking=True)
-        targets = targets.to(device, non_blocking=True)
+        images_dev = images.to(device, non_blocking=True)
+        targets_dev = targets.to(device, non_blocking=True)
 
-        outputs = model(images)
+        outputs = model(images_dev)
         if isinstance(outputs, tuple):
             logits, _aux_loss = outputs
         else:
             logits = outputs
 
-        loss = loss_fn(logits, targets)
+        loss = loss_fn(logits, targets_dev)
         preds = logits.argmax(dim=-1)
-        correct = (preds == targets).sum().item()
+        correct = (preds == targets_dev).sum().item()
 
-        batch_size = images.shape[0]
+        batch_size = images_dev.shape[0]
         total_loss += loss.item() * batch_size
         total_correct += correct
         total_examples += batch_size
@@ -676,7 +693,7 @@ def build_configurations(base_config: dict) -> list[dict]:
     return configurations
 
 
-def run_configuration(
+def run_configuration(  # noqa: PLR0915, C901
     data_loaders: tuple[DataLoader, DataLoader, DataLoader],
     base_config: dict,
     variant_config: dict,
@@ -693,6 +710,10 @@ def run_configuration(
         variant_config: Model-specific overrides.
         device: Compute device.
         logger: Python logger.
+        early_stop_patience: Number of epochs with no sufficient improvement
+            after which training is stopped early. Set 0 to disable.
+        early_stop_min_delta: Minimum improvement in validation loss required to
+            reset the early stopping patience counter.
 
     Returns:
         A result dictionary including config, status, metrics, and metadata.
@@ -803,7 +824,7 @@ def run_configuration(
     return result
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915, C901
     """Runs MNIST training across model groups and prints a results table.
 
     CLI arguments:
@@ -889,13 +910,6 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
-
-    # Data pipeline
-    # Inputs: images [B, 1, 28, 28], labels [B]
-    from torchvision import (
-        datasets,
-        transforms,
-    )  # Imported here to avoid hard dependency on import-time
 
     transform = transforms.Compose(
         [

@@ -1,3 +1,6 @@
+# ABOUTME: Profiles GLU and Masked-GLU variants for speed, memory, and params.
+# ABOUTME: Produces summary tables and GLU vs MGLU comparisons for each config.
+
 """Profiling script for GLU variants in mlp_utils.
 
 This script benchmarks the performance of different GLU implementations,
@@ -9,9 +12,11 @@ including both standard GLU and Masked GLU (MGLU) variants.
 import time
 import tracemalloc
 
+from typing import cast
+
 import torch
 
-from tabulate import tabulate
+from tabulate import tabulate  # type: ignore[import-untyped]
 from torch import nn
 
 from mlp_utils.layers.glu import (
@@ -32,7 +37,8 @@ class GLUBenchmark:
     """Benchmark suite for GLU variants."""
 
     def __init__(
-        self, device: str = "cuda" if torch.cuda.is_available() else "cpu"
+        self,
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
     ) -> None:
         self.device = device
 
@@ -150,7 +156,10 @@ class GLUBenchmark:
             }
 
     def benchmark_variant(
-        self, variant_name: str, variant_class: type[nn.Module], config: dict[str, int]
+        self,
+        variant_name: str,
+        variant_class: type[nn.Module],
+        config: dict[str, int],
     ) -> dict[str, float]:
         """Benchmark a single GLU variant."""
         model = variant_class(
@@ -179,9 +188,9 @@ class GLUBenchmark:
             "parameters": param_count,
         }
 
-    def run_benchmarks(self) -> dict[str, dict[str, dict[str, float]]]:
+    def run_benchmarks(self) -> dict[str, dict[str, dict[str, float | str]]]:
         """Run benchmarks for all variants and configurations."""
-        results = {}
+        results: dict[str, dict[str, dict[str, float | str]]] = {}
 
         print(f"Running benchmarks on {self.device.upper()}")
         print("=" * 60)
@@ -201,7 +210,9 @@ class GLUBenchmark:
                     benchmark_result = self.benchmark_variant(
                         variant_name, variant_class, config
                     )
-                    results[config_name][variant_name] = benchmark_result
+                    results[config_name][variant_name] = cast(
+                        dict[str, float | str], benchmark_result
+                    )
                 except Exception as e:
                     print(f"    Error benchmarking {variant_name}: {e}")
                     results[config_name][variant_name] = {"error": str(e)}
@@ -209,7 +220,7 @@ class GLUBenchmark:
         return results
 
     def print_results_table(
-        self, results: dict[str, dict[str, dict[str, float]]]
+        self, results: dict[str, dict[str, dict[str, float | str]]]
     ) -> None:
         """Print benchmark results in a formatted table."""
         print("\n" + "=" * 100)
@@ -232,17 +243,15 @@ class GLUBenchmark:
             table_data = []
 
             # Sort variants for consistent output
-            sorted_variants = []
-
-            # Regular GLUs first
-            for variant in ["GLU", "Bilinear", "ReGLU", "SwiGLU", "GeGLU"]:
-                if variant in config_results:
-                    sorted_variants.append(variant)
-
-            # MGLUs second
-            for variant in ["MGLU", "BilinearMGLU", "ReMGLU", "SwiMGLU", "GeMGLU"]:
-                if variant in config_results:
-                    sorted_variants.append(variant)
+            sorted_variants = [
+                v
+                for v in ["GLU", "Bilinear", "ReGLU", "SwiGLU", "GeGLU"]
+                if v in config_results
+            ] + [
+                v
+                for v in ["MGLU", "BilinearMGLU", "ReMGLU", "SwiMGLU", "GeMGLU"]
+                if v in config_results
+            ]
 
             for variant in sorted_variants:
                 stats = config_results[variant]
@@ -254,12 +263,12 @@ class GLUBenchmark:
                     table_data.append(
                         [
                             variant,
-                            f"{stats['forward_time_ms']:.2f}",
-                            f"{stats['backward_time_ms']:.2f}",
-                            f"{stats['total_time_ms']:.2f}",
-                            f"{stats['forward_memory_mb']:.1f}",
-                            f"{stats['backward_memory_mb']:.1f}",
-                            f"{stats['parameters']:,}",
+                            f"{float(stats['forward_time_ms']):.2f}",
+                            f"{float(stats['backward_time_ms']):.2f}",
+                            f"{float(stats['total_time_ms']):.2f}",
+                            f"{float(stats['forward_memory_mb']):.1f}",
+                            f"{float(stats['backward_memory_mb']):.1f}",
+                            f"{int(float(stats['parameters'])):,}",
                         ]
                     )
 
@@ -274,7 +283,7 @@ class GLUBenchmark:
             )
 
     def compare_glu_vs_mglu(
-        self, results: dict[str, dict[str, dict[str, float]]]
+        self, results: dict[str, dict[str, dict[str, float | str]]]
     ) -> None:
         """Compare GLU vs MGLU variants."""
         print("\n" + "=" * 100)
@@ -308,14 +317,15 @@ class GLUBenchmark:
                     mglu_stats = config_results[mglu_name]
 
                     if "error" not in glu_stats and "error" not in mglu_stats:
-                        time_ratio = (
-                            mglu_stats["total_time_ms"] / glu_stats["total_time_ms"]
+                        time_ratio = float(mglu_stats["total_time_ms"]) / float(
+                            glu_stats["total_time_ms"]
                         )
-                        memory_ratio = (
-                            mglu_stats["backward_memory_mb"]
-                            / glu_stats["backward_memory_mb"]
+                        memory_ratio = float(mglu_stats["backward_memory_mb"]) / float(
+                            glu_stats["backward_memory_mb"]
                         )
-                        param_ratio = mglu_stats["parameters"] / glu_stats["parameters"]
+                        param_ratio = float(mglu_stats["parameters"]) / float(
+                            glu_stats["parameters"]
+                        )
 
                         # Determine performance indicator
                         if time_ratio < 1.0 and memory_ratio < 1.0:

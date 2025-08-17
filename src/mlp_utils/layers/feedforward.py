@@ -90,7 +90,10 @@ class FeedForward(nn.Module):
             glu_layer = glu_class(dim, hidden_dim)
             output_proj = nn.Linear(hidden_dim, dim)
 
-            initialize_weights(glu_layer.proj, init_method="default")
+            # Initialize the internal projection if present and compatible.
+            proj = getattr(glu_layer, "proj", None)
+            if isinstance(proj, nn.Linear):
+                initialize_weights(proj, init_method="default")
             initialize_weights(output_proj, init_method="default", scale=0.1)
 
             self.net = nn.Sequential(

@@ -1,6 +1,17 @@
+# ABOUTME: Verifies basic trainability across MLP-family models on synthetic data.
+# ABOUTME: Runs quick training loops and prints a rich summary table of results.
+
+"""Quick training verification for multiple model variants.
+
+Creates synthetic data, trains various `mlp_utils` models briefly, and reports
+final losses and runtimes in a rich table. Intended for sanity checks.
+"""
+
 import argparse
 import logging
 import time
+
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -20,7 +31,9 @@ from mlp_utils.layers.pathweightedfff import PathWeightedFFF
 from mlp_utils.layers.switch_ffn import SwitchFFN
 
 
-def get_synthetic_data(batch_size, seq_len, dim):
+def get_synthetic_data(
+    batch_size: int, seq_len: int, dim: int
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Generates a batch of synthetic data for a regression task."""
     x = torch.randn(batch_size, seq_len, dim)
     # A simple, non-linear function for the models to learn
@@ -28,7 +41,7 @@ def get_synthetic_data(batch_size, seq_len, dim):
     return x, y_true
 
 
-def get_model(config: dict) -> nn.Module:
+def get_model(config: dict) -> nn.Module:  # noqa: PLR0911
     """Instantiates a model based on the provided configuration."""
     model_name = config["model_name"]
     dim = config["dim"]
@@ -36,7 +49,9 @@ def get_model(config: dict) -> nn.Module:
 
     if model_name == "mlp":
         # Map legacy pre_norm flag to the new norm_mode API
-        norm_mode = "pre" if config.get("pre_norm", False) else "post"
+        norm_mode: Literal["pre", "post", "both", "none"] = (
+            "pre" if config.get("pre_norm", False) else "post"
+        )
         return MLP(
             input_dim=dim,
             output_dim=dim,

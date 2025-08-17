@@ -23,8 +23,8 @@ def exists(v: T | None) -> bool:
 
 
 def default(v: T | None, d: T) -> T:
-    """Return v if it exists, otherwise return d."""
-    return v if exists(v) else d
+    """Return v if it is not None, otherwise return d."""
+    return d if v is None else v
 
 
 def l2norm(t: torch.Tensor, dim: int = -1, norm_eps: float = 0.0) -> torch.Tensor:
