@@ -101,14 +101,14 @@ Tests (integration):
 - [x] Ensure docstrings include parameter meaning and equations where helpful.
 
 Acceptance:
-- [ ] README snippet imports and runs in a local Python shell.
+- [x] README snippet imports and runs in a local Python shell.
 
 ---
 
 ### 8) Test hygiene and CI
-- [ ] Parametrize tests over dtypes (`float32`, `float64`), transforms, and select `smoothing_tau` values.
-- [ ] Configure tolerances (`rtol`, `atol`) and avoid flaky comparisons.
-- [ ] Mark heavier tests (gradcheck, XOR training) as `@pytest.mark.slow` and skip in default CI.
+- [x] Parametrize tests over dtypes (`float32`, `float64`), transforms, and select `smoothing_tau` values.
+- [x] Configure tolerances (`rtol`, `atol`) and avoid flaky comparisons.
+- [x] Mark heavier tests (gradcheck, XOR training) as `@pytest.mark.slow` and skip in default CI.
 - [x] Ensure `pytest -q` is green on CPU-only environment.
 
 ---
@@ -120,4 +120,4 @@ Acceptance:
 - [x] Run the full test suite locally; ensure zero failures.
 
 Done when:
-- [ ] All checkboxes above are completed, tests are green, and README/docs accurately reflect the implemented APIs.
+- [x] All checkboxes above are completed, tests are green, and README/docs accurately reflect the implemented APIs.
