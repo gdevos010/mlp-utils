@@ -13,9 +13,9 @@ def test_ngpt_default_initialization() -> None:
     ngpt_block = NGPT(dim=dim)
 
     assert ngpt_block is not None, "nGPT block should be initialized."
-    assert isinstance(ngpt_block.feedforward_net, FeedForward), (
-        "Default feedforward net should be SwiGLU."
-    )
+    assert isinstance(
+        ngpt_block.feedforward_net, FeedForward
+    ), "Default feedforward net should be SwiGLU."
     assert isinstance(ngpt_block.alpha_m, Scale), "alpha_m should be a Scale module."
 
 
@@ -36,15 +36,15 @@ def test_ngpt_default_forward_pass() -> None:
     output = ngpt_block(h_normalized)
 
     # Check output shape
-    assert output.shape == h.shape, (
-        f"Expected output shape {h.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == h.shape
+    ), f"Expected output shape {h.shape}, but got {output.shape}"
 
     # Check if the output is normalized
     output_norms = torch.linalg.norm(output, dim=-1)
-    assert torch.allclose(output_norms, torch.ones_like(output_norms), atol=1e-6), (
-        "Output should be normalized."
-    )
+    assert torch.allclose(
+        output_norms, torch.ones_like(output_norms), atol=1e-6
+    ), "Output should be normalized."
 
 
 def test_ngpt_default_gradients() -> None:
@@ -65,15 +65,15 @@ def test_ngpt_default_gradients() -> None:
     loss.backward()
 
     # Check gradient for nGPT's alpha_m
-    assert ngpt_block.alpha_m.scale.grad is not None, (
-        "alpha_m's scale should have gradients."
-    )
+    assert (
+        ngpt_block.alpha_m.scale.grad is not None
+    ), "alpha_m's scale should have gradients."
 
     # Check gradients for the default feedforward network's parameters
     for param in ngpt_block.feedforward_net.parameters():
-        assert param.grad is not None, (
-            "All parameters in the default feedforward network should have gradients."
-        )
+        assert (
+            param.grad is not None
+        ), "All parameters in the default feedforward network should have gradients."
 
 
 def test_ngpt_with_fastfeedforward_initialization() -> None:
@@ -84,9 +84,9 @@ def test_ngpt_with_fastfeedforward_initialization() -> None:
     ngpt_block = NGPT(feedforward_net=fff, dim=dim)
 
     assert ngpt_block is not None, "nGPT block should be initialized."
-    assert ngpt_block.feedforward_net is fff, (
-        "Feedforward network should be set correctly."
-    )
+    assert (
+        ngpt_block.feedforward_net is fff
+    ), "Feedforward network should be set correctly."
 
 
 def test_ngpt_with_fastfeedforward_forward_pass() -> None:
@@ -120,15 +120,15 @@ def test_ngpt_with_fastfeedforward_forward_pass() -> None:
     output = ngpt_block(h_normalized)
 
     # 5. Check output shape
-    assert output.shape == h.shape, (
-        f"Expected output shape {h.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == h.shape
+    ), f"Expected output shape {h.shape}, but got {output.shape}"
 
     # 6. Check if the output is normalized
     output_norms = torch.linalg.norm(output, dim=-1)
-    assert torch.allclose(output_norms, torch.ones_like(output_norms), atol=1e-6), (
-        "Output should be normalized."
-    )
+    assert torch.allclose(
+        output_norms, torch.ones_like(output_norms), atol=1e-6
+    ), "Output should be normalized."
 
 
 def test_ngpt_with_fastfeedforward_gradients() -> None:
@@ -158,9 +158,9 @@ def test_ngpt_with_fastfeedforward_gradients() -> None:
     loss.backward()
 
     # Check gradient for nGPT's alpha_m
-    assert ngpt_block.alpha_m.scale.grad is not None, (
-        "alpha_m's scale should have gradients."
-    )
+    assert (
+        ngpt_block.alpha_m.scale.grad is not None
+    ), "alpha_m's scale should have gradients."
 
     # Check gradients for FastFeedForward's parameters
     # With soft routing, all routers and experts should have grads.
@@ -170,6 +170,6 @@ def test_ngpt_with_fastfeedforward_gradients() -> None:
 
     for expert in fff.experts:
         for param in expert.parameters():
-            assert param.grad is not None, (
-                "All expert parameters should have gradients."
-            )
+            assert (
+                param.grad is not None
+            ), "All expert parameters should have gradients."

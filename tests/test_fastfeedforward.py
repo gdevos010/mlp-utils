@@ -42,9 +42,9 @@ def test_fastfeedforward_forward_pass_expert_dim() -> None:
     output = fff(x)
 
     # Check if the output shape is correct
-    assert output.shape == x.shape, (
-        f"Expected output shape {x.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == x.shape
+    ), f"Expected output shape {x.shape}, but got {output.shape}"
 
 
 def test_fastfeedforward_forward_pass() -> None:
@@ -67,9 +67,9 @@ def test_fastfeedforward_forward_pass() -> None:
     output = fff(x)
 
     # Check if the output shape is correct
-    assert output.shape == x.shape, (
-        f"Expected output shape {x.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == x.shape
+    ), f"Expected output shape {x.shape}, but got {output.shape}"
 
 
 def test_fastfeedforward_forward_pass_pre_norm() -> None:
@@ -93,9 +93,9 @@ def test_fastfeedforward_forward_pass_pre_norm() -> None:
     output = fff(x)
 
     # Check if the output shape is correct
-    assert output.shape == x.shape, (
-        f"Expected output shape {x.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == x.shape
+    ), f"Expected output shape {x.shape}, but got {output.shape}"
 
 
 def test_fastfeedforward_eval_mode() -> None:
@@ -115,9 +115,9 @@ def test_fastfeedforward_eval_mode() -> None:
     x = torch.randn(batch_size, seq_len, dim)
     output = fff(x)
 
-    assert output.shape == x.shape, (
-        f"Expected output shape {x.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == x.shape
+    ), f"Expected output shape {x.shape}, but got {output.shape}"
 
 
 def test_fastfeedforward_generic_hard_routing_path() -> None:
@@ -140,9 +140,9 @@ def test_fastfeedforward_generic_hard_routing_path() -> None:
     x = torch.randn(batch_size, seq_len, dim)
     output = fff(x)
 
-    assert output.shape == x.shape, (
-        f"Expected output shape {x.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == x.shape
+    ), f"Expected output shape {x.shape}, but got {output.shape}"
 
 
 def test_fastfeedforward_soft_routing_grad() -> None:
@@ -173,9 +173,9 @@ def test_fastfeedforward_soft_routing_grad() -> None:
     # Check that all experts have gradients
     for expert in fff.experts:
         for param in expert.parameters():
-            assert param.grad is not None, (
-                "All expert parameters should have gradients in soft routing."
-            )
+            assert (
+                param.grad is not None
+            ), "All expert parameters should have gradients in soft routing."
 
 
 # def test_fastfeedforward_hard_routing_grad() -> None:

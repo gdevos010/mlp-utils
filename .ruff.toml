@@ -85,6 +85,7 @@ exclude = [
     "node_modules",
     "venv",
     "docs",
+    "tests",
 ]
 
 # Allow unused variables when underscore-prefixed.

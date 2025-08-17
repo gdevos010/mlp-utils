@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "pre-commit>=4.3.0",
     "ipykernel>=6.29.5",
     "pytest>=7.2.2",
     "pytest-flakefinder>=1.0.0",
@@ -45,4 +46,3 @@ addopts = [
     "--strict-config",
     "--color=yes",
 ]
-

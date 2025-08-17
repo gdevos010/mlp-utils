@@ -15,9 +15,9 @@ def test_spatial_gating_unit_output_shape(sample_input):
     batch_size, seq_len, dim = sample_input.shape
     sgu = SpatialGatingUnit(dim=dim, seq_len=seq_len)
     output = sgu(sample_input)
-    assert output.shape == sample_input.shape, (
-        f"Expected shape {sample_input.shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == sample_input.shape
+    ), f"Expected shape {sample_input.shape}, but got {output.shape}"
 
 
 def test_gmlp_block_output_shape(sample_input):
@@ -26,9 +26,11 @@ def test_gmlp_block_output_shape(sample_input):
     dim_ff = 256
     gmlp_block = GMLPBlock(dim=dim, dim_ff=dim_ff, seq_len=seq_len)
     output = gmlp_block(sample_input)
-    assert output.shape == (batch_size, seq_len, dim), (
-        f"Expected shape {(batch_size, seq_len, dim)}, but got {output.shape}"
-    )
+    assert output.shape == (
+        batch_size,
+        seq_len,
+        dim,
+    ), f"Expected shape {(batch_size, seq_len, dim)}, but got {output.shape}"
 
 
 def test_gmlp_output_shape(sample_input):
@@ -38,9 +40,11 @@ def test_gmlp_output_shape(sample_input):
     depth = 6
     gmlp = GMLP(dim=dim, dim_ff=dim_ff, seq_len=seq_len, depth=depth)
     output = gmlp(sample_input)
-    assert output.shape == (batch_size, seq_len, dim), (
-        f"Expected shape {(batch_size, seq_len, dim)}, but got {output.shape}"
-    )
+    assert output.shape == (
+        batch_size,
+        seq_len,
+        dim,
+    ), f"Expected shape {(batch_size, seq_len, dim)}, but got {output.shape}"
 
 
 def test_gmlp_forward_pass(sample_input):

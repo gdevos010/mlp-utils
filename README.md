@@ -64,7 +64,7 @@ ffn = FeedForward(
 
 The `NGPT` class implements the feed-forward block from the paper ["nGPT: Normalized Transformer with Representation Learning on the Hypersphere."](https://arxiv.org/html/2410.01131v2).
 
-This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere. 
+This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere.
 
 You can use it as a standalone layer:
 
@@ -318,7 +318,7 @@ residual_mlp = ResidualWrapper(
 ## TODO
 
 - [] [Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node](https://arxiv.org/html/2405.16836v1)
-- [] limiting soft routing to top-k paths (stochastic top-k or beam) to reduce compute work during training 
+- [] limiting soft routing to top-k paths (stochastic top-k or beam) to reduce compute work during training
 
 
 ## Citations
@@ -381,43 +381,43 @@ residual_mlp = ResidualWrapper(
 
 ```bibtex
 @misc{belcak2023fastfeedforwardnetworks,
-      title={Fast Feedforward Networks}, 
+      title={Fast Feedforward Networks},
       author={Peter Belcak and Roger Wattenhofer},
       year={2023},
-      url={https://arxiv.org/abs/2308.14711}, 
+      url={https://arxiv.org/abs/2308.14711},
 }
 ```
 
 ```bibtex
 @misc{fedus2022switchtransformersscalingtrillion,
-      title={Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity}, 
+      title={Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity},
       author={William Fedus and Barret Zoph and Noam Shazeer},
       year={2022},
       eprint={2101.03961},
       archivePrefix={arXiv},
       primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2101.03961}, 
+      url={https://arxiv.org/abs/2101.03961},
 }
 ```
-<!-- 
+<!--
 ```bibtex
 # TODO
 @misc{charalampopoulos2024enhancingfastfeedforward,
-      title={Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node}, 
+      title={Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node},
       author={Andreas Charalampopoulos and Nikolas Chatzis and Foivos Ntoulas-Panagiotopoulos and Charilaos Papaioannou and Alexandros Potamianos},
       year={2024},
       eprint={2405.16836},
       archivePrefix={arXiv},
       primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2405.16836}, 
+      url={https://arxiv.org/abs/2405.16836},
 }
 ``` -->
 
 ```bibtex
 @misc{belcak2023exponentiallyfasterlanguagemodelling,
-      title={Exponentially Faster Language Modelling}, 
+      title={Exponentially Faster Language Modelling},
       author={Peter Belcak and Roger Wattenhofer},
       year={2023},
-      url={https://arxiv.org/abs/2311.10770}, 
+      url={https://arxiv.org/abs/2311.10770},
 }
 ```
