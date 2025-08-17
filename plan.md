@@ -13,6 +13,7 @@ Reference: Tversky Neural Networks: Psychologically Plausible Deep Learning with
 - Full reproduction of the paper’s end-to-end pipelines (NABirds, PTB). We'll provide hooks/examples only.
 
 ### Repo integration targets
+- you: are on a tnn git branch
 - Code: `src/mlp_utils/layers/tversky.py`
 - Exports: `src/mlp_utils/layers/__init__.py`
 - Tests: `tests/test_tversky.py`

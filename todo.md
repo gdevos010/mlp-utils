@@ -14,7 +14,7 @@ Use this as a living checklist while implementing `tversky.py`, tests, docs, and
 - [x] Sanity: `pytest -q` runs with 0 failures (skipped ok).
 
 Acceptance:
-- [ ] `from mlp_utils.layers import TverskyProjection` imports without side effects.
+- [x] `from mlp_utils.layers import TverskyProjection` imports without side effects.
 
 ---
 
@@ -42,34 +42,34 @@ Tests (unit):
 ---
 
 ### 3) Implement `pairwise_tversky`
-- [ ] Vectorized computation over prototypes: `[B,D]×[K,D]→[B,K]`.
-- [ ] Broadcasting support for leading dims: `[*,D]×[K,D]→[*,K]`.
-- [ ] Forward parameters for `input_transform`, `nonnegative`, `smoothing_tau`, `alpha`, `beta`, `eps`.
+- [x] Vectorized computation over prototypes: `[B,D]×[K,D]→[B,K]`.
+- [x] Broadcasting support for leading dims: `[*,D]×[K,D]→[*,K]`.
+- [x] Forward parameters for `input_transform`, `nonnegative`, `smoothing_tau`, `alpha`, `beta`, `eps`.
 
 Tests (unit):
-- [ ] Shapes for `[B,D]×[K,D]` and `[B,T,D]×[K,D]` produce `[B,K]` and `[B,T,K]`.
-- [ ] Parity with Python loop over K within numeric tolerance.
-- [ ] Gradients nonzero and finite w.r.t. inputs and prototypes.
-- [ ] Dtype/device: CPU `float32/float64` parity.
+- [x] Shapes for `[B,D]×[K,D]` and `[B,T,D]×[K,D]` produce `[B,K]` and `[B,T,K]`.
+- [x] Parity with Python loop over K within numeric tolerance.
+- [x] Gradients nonzero and finite w.r.t. inputs and prototypes.
+- [x] Dtype/device: CPU `float32/float64` parity.
 
 ---
 
 ### 4) Implement `TverskyProjection` layer
-- [ ] Constructor: `TverskyProjection(input_dim, output_dim, alpha=0.5, beta=0.5, eps=1e-6, bias=False, input_transform=None, nonnegative=True, smoothing_tau=None, learnable_alpha=False, learnable_beta=False, alpha_beta_normalize=False, temperature=None)`.
-- [ ] Parameters: `weight` shape `[out,in]`; optional `bias` shape `[out]` (default off to preserve `(0,1]`).
+- [x] Constructor: `TverskyProjection(input_dim, output_dim, alpha=0.5, beta=0.5, eps=1e-6, bias=False, input_transform=None, nonnegative=True, smoothing_tau=None, learnable_alpha=False, learnable_beta=False, alpha_beta_normalize=False, temperature=None)`.
+- [x] Parameters: `weight` shape `[out,in]`; optional `bias` shape `[out]` (default off to preserve `(0,1]`).
 - [ ] α/β handling: buffers by default; if learnable, register unconstrained params mapped via softplus to positive α/β.
 - [ ] Optional `alpha_beta_normalize=True`: renormalize α and β so `α+β=1`.
-- [ ] Forward: compute `pairwise_tversky(x, weight, ...)`, add optional bias, apply optional temperature scaling; preserve leading batch dims.
-- [ ] Register buffers and dtypes/devices properly; ensure `.to(device)` moves α/β.
-- [ ] Range semantics note in docstring: bias/temperature break strict `(0,1]` interpretation.
+- [x] Forward: compute `pairwise_tversky(x, weight, ...)`, add optional bias, apply optional temperature scaling; preserve leading batch dims.
+- [x] Register buffers and dtypes/devices properly; ensure `.to(device)` moves α/β.
+- [x] Range semantics note in docstring: bias/temperature break strict `(0,1]` interpretation.
 
 Tests (module):
-- [ ] Parameter shapes and registration (`weight`, `bias` when enabled).
-- [ ] Forward shape preserved; values in `(0,1]` for defaults and nonnegative inputs.
+- [x] Parameter shapes and registration (`weight`, `bias` when enabled).
+- [x] Forward shape preserved; values in `(0,1]` for defaults and nonnegative inputs.
 - [ ] Learnable α/β positivity (softplus) and optional normalization (`≈1` sum).
-- [ ] Training step reduces a simple loss; gradient flows to `weight` and learnable α/β if enabled.
-- [ ] `state_dict` save/load roundtrip yields identical outputs.
-- [ ] JIT/compile: `torch.jit.script` or `trace` forward works; optionally `torch.compile` if available.
+- [x] Training step reduces a simple loss; gradient flows to `weight` and learnable α/β if enabled.
+- [x] `state_dict` save/load roundtrip yields identical outputs.
+- [x] JIT/compile: `torch.jit.script` or `trace` forward works; optionally `torch.compile` if available.
 
 ---
 
@@ -109,15 +109,15 @@ Acceptance:
 - [ ] Parametrize tests over dtypes (`float32`, `float64`), transforms, and select `smoothing_tau` values.
 - [ ] Configure tolerances (`rtol`, `atol`) and avoid flaky comparisons.
 - [ ] Mark heavier tests (gradcheck, XOR training) as `@pytest.mark.slow` and skip in default CI.
-- [ ] Ensure `pytest -q` is green on CPU-only environment.
+- [x] Ensure `pytest -q` is green on CPU-only environment.
 
 ---
 
 ### 9) Final wiring
-- [ ] Export all public APIs from `mlp_utils.layers` and verify they are importable.
-- [ ] Confirm no orphaned code, no unused symbols, and clear `__all__` in `tversky.py`.
-- [ ] Code readability: type hints, descriptive names, concise comments/docstrings.
-- [ ] Run the full test suite locally; ensure zero failures.
+- [x] Export all public APIs from `mlp_utils.layers` and verify they are importable.
+- [x] Confirm no orphaned code, no unused symbols, and clear `__all__` in `tversky.py`.
+- [x] Code readability: type hints, descriptive names, concise comments/docstrings.
+- [x] Run the full test suite locally; ensure zero failures.
 
 Done when:
 - [ ] All checkboxes above are completed, tests are green, and README/docs accurately reflect the implemented APIs.

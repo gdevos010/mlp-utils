@@ -1,16 +1,18 @@
 # ABOUTME: Differentiable Tversky similarity utilities and projection layer stubs.
 # ABOUTME: Provides function and module scaffolding to be implemented in later steps.
-"""Tversky similarity functions and a projection layer (scaffold).
+"""Tversky similarity functions and a projection layer.
 
-This module provides the public API for Tversky-based similarity and a
-`TverskyProjection` layer that projects inputs onto a bank of prototypes using the
-Tversky similarity. Implementations are added in subsequent steps.
+This module provides Tversky-based similarity utilities and
+`TverskyProjection`, a layer that projects inputs onto a bank of prototypes
+using the Tversky similarity.
 
 Reference: Tversky Neural Networks: Psychologically Plausible Deep Learning with
 Differentiable Tversky Similarity (arXiv:2506.11035).
 """
 
 from __future__ import annotations
+
+import math
 
 from collections.abc import Callable
 
@@ -140,38 +142,59 @@ def pairwise_tversky(  # noqa: PLR0913
     nonnegative: bool = True,
     smoothing_tau: float | None = None,
 ) -> torch.Tensor:
-    """Compute pairwise Tversky similarities between inputs and a bank of prototypes.
+    """Compute pairwise Tversky similarities between inputs and prototypes.
 
-    This is a scaffold stub. The implementation will vectorize over prototypes
-    and support broadcasting over leading dimensions of `input`.
+    Vectorizes over the prototype axis and supports broadcasting over all leading
+    dimensions of ``input``. Internally delegates to :func:`tversky_similarity`.
 
     Args:
-        input: Tensor of shape ([...,] D).
-        prototypes: Tensor of shape (K, D).
+        input: Tensor of shape ``[..., D]``.
+        prototypes: Tensor of shape ``[K, D]`` where each row is a prototype.
         alpha: Weight for input-only mass.
         beta: Weight for prototype-only mass.
         eps: Numerical stability constant.
         input_transform: Optional transform applied before proxy set operations.
         nonnegative: If True and no explicit transform is provided, clamp to nonnegative.
-        smoothing_tau: Optional temperature for smoothed proxies; if provided,
-            must be > 0.
+        smoothing_tau: Optional temperature for smoothed proxies; if provided, must be > 0.
 
     Returns:
-        Tensor of shape ([...,] K) with similarity scores.
-
-    Raises:
-        NotImplementedError: This function is a scaffold and not yet implemented.
+        Tensor of shape ``[..., K]`` with similarity scores.
     """
-    raise NotImplementedError
+    # Shape to enable broadcasting across prototypes: [..., 1, D] vs [K, D] -> [..., K, D]
+    input_expanded = input.unsqueeze(-2)
+    prototypes_expanded = prototypes.unsqueeze(0)
+    sims = tversky_similarity(
+        input_expanded,
+        prototypes_expanded,
+        alpha=alpha,
+        beta=beta,
+        eps=eps,
+        input_transform=input_transform,
+        nonnegative=nonnegative,
+        smoothing_tau=smoothing_tau,
+    )
+    return sims
 
 
 class TverskyProjection(nn.Module):
-    """Layer that projects inputs via Tversky similarity against learned prototypes.
+    """Projection layer using Tversky similarity against learned prototypes.
 
-    This is a scaffold stub. The final implementation will register learnable
-    prototype weights of shape [output_dim, input_dim], optional bias, and
-    optional learnable alpha/beta parameters, and will compute pairwise Tversky
-    similarities in the forward pass.
+    Parameters:
+        input_dim: Feature dimension of inputs.
+        output_dim: Number of prototypes (output channels).
+        alpha, beta: Weights for distinctive parts in Tversky denominator. Stored as buffers.
+        eps: Numerical stability constant for similarity formula.
+        bias: If True, add a learnable bias of shape ``[output_dim]``.
+        input_transform: Optional transform applied before proxy set operations.
+        nonnegative: If True and no explicit transform is provided, clamp to nonnegative.
+        smoothing_tau: Optional temperature for smoothed proxies; if provided, must be > 0.
+        learnable_alpha, learnable_beta: Reserved for future extension (not enabled yet).
+        alpha_beta_normalize: Reserved for future extension to renormalize alpha/beta.
+        temperature: Optional post-similarity scaling factor.
+
+    Notes:
+        - With ``bias=False`` and default ``temperature`` on nonnegative inputs, outputs lie in (0, 1].
+        - Enabling ``bias`` and/or non-unit ``temperature`` produces affine/scale-transformed similarities.
     """
 
     def __init__(  # noqa: PLR0913
@@ -192,12 +215,57 @@ class TverskyProjection(nn.Module):
         temperature: float | None = None,
     ) -> None:
         super().__init__()
-        raise NotImplementedError
+
+        if learnable_alpha or learnable_beta:
+            raise NotImplementedError(
+                "Learnable alpha/beta are planned in a later step (see plan.md)."
+            )
+
+        # Parameters: weight and optional bias
+        self.weight = nn.Parameter(torch.empty(output_dim, input_dim))
+        if bias:
+            self.bias = nn.Parameter(torch.empty(output_dim))
+        else:
+            self.bias = None
+
+        # Register fixed alpha/beta/eps as buffers so module.to(device) moves them
+        default_dtype = torch.get_default_dtype()
+        self.register_buffer("alpha", torch.tensor(float(alpha), dtype=default_dtype))
+        self.register_buffer("beta", torch.tensor(float(beta), dtype=default_dtype))
+        self.register_buffer("eps", torch.tensor(float(eps), dtype=default_dtype))
+
+        # Store configuration flags
+        self.input_transform = input_transform
+        self.nonnegative = bool(nonnegative)
+        self.smoothing_tau = float(smoothing_tau) if smoothing_tau is not None else None
+        self.alpha_beta_normalize = bool(alpha_beta_normalize)
+        self.temperature = float(temperature) if temperature is not None else None
+
+        # Initialize parameters similar to nn.Linear
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize weights and optional bias with Kaiming-uniform heuristics."""
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
-        """Forward pass (scaffold).
-
-        Raises:
-            NotImplementedError: This method is a scaffold and not yet implemented.
-        """
-        raise NotImplementedError
+        """Forward pass (scaffold)."""
+        sims = pairwise_tversky(
+            x,
+            self.weight,
+            alpha=float(self.alpha.item()),
+            beta=float(self.beta.item()),
+            eps=float(self.eps.item()),
+            input_transform=self.input_transform,
+            nonnegative=self.nonnegative,
+            smoothing_tau=self.smoothing_tau,
+        )
+        if self.bias is not None:
+            sims = sims + self.bias
+        if self.temperature is not None:
+            sims = sims * self.temperature
+        return sims

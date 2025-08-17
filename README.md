@@ -334,6 +334,27 @@ residual_mlp = ResidualWrapper(
 }
 ```
 
+#### TverskyProjection
+
+Similarity-based projection using differentiable Tversky similarity (see [arXiv:2506.11035](https://arxiv.org/abs/2506.11035)).
+
+```python
+from mlp_utils.layers import TverskyProjection
+import torch
+
+# Create a projection with 16-dimensional inputs and 8 prototypes
+proj = TverskyProjection(
+    input_dim=16,
+    output_dim=8,
+    alpha=0.5,
+    beta=0.5,
+    bias=False,
+)
+
+x = torch.rand(4, 16)  # nonnegative inputs keep outputs in (0, 1]
+y = proj(x)            # shape: [4, 8]
+```
+
 ```bibtex
 @inproceedings{Horuz2025TheRO,
     title   = {The Resurrection of the ReLU},
