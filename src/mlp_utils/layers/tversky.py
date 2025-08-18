@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 
 from collections.abc import Callable
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -33,14 +34,14 @@ def tversky_similarity(  # noqa: C901, PLR0913, PLR0912, PLR0915
     input: torch.Tensor,  # noqa: A002
     prototype: torch.Tensor,
     *,
-    alpha: float = 0.5,
-    beta: float = 0.5,
-    theta: float = 1e-7,
+    alpha: float | torch.Tensor = 0.5,
+    beta: float | torch.Tensor = 0.5,
+    theta: float | torch.Tensor = 1e-7,
     input_transform: str | Callable[[torch.Tensor], torch.Tensor] | None = None,
     nonnegative: bool = True,
     smoothing_tau: float | None = None,
-    intersection_reduction: str = "sum",
-    difference_reduction: str = "subtractmatch",
+    intersection_reduction: Literal["sum", "mean", "product"] = "sum",
+    difference_reduction: Literal["ignorematch", "subtractmatch"] = "subtractmatch",
     match_threshold: float = 0.0,
 ) -> torch.Tensor:
     """Compute the (differentiable) Tversky similarity between two tensors.
@@ -133,7 +134,9 @@ def tversky_similarity(  # noqa: C901, PLR0913, PLR0912, PLR0915
         # Smooth minimum via soft-min: -tau * logsumexp([-x/tau, -y/tau])
         stacked = torch.stack((x_b, y_b), dim=-1)  # (..., D, 2)
         soft_min = -tau * torch.logsumexp(-stacked / tau, dim=-1)  # (..., D)
-        i_components = soft_min
+        # Add shift so that for nonnegative inputs, intersection components
+        # remain nonnegative and match the attribution path.
+        i_components = soft_min + tau * math.log(2.0)
 
         # Smooth ReLU via tau * softplus((z)/tau)
         a_components = tau * F.softplus((x_b - y_b) / tau)
@@ -178,14 +181,14 @@ def pairwise_tversky(  # noqa: PLR0913
     input: torch.Tensor,  # noqa: A002
     prototypes: torch.Tensor,
     *,
-    alpha: float = 0.5,
-    beta: float = 0.5,
-    theta: float = 1e-7,
+    alpha: float | torch.Tensor = 0.5,
+    beta: float | torch.Tensor = 0.5,
+    theta: float | torch.Tensor = 1e-7,
     input_transform: str | Callable[[torch.Tensor], torch.Tensor] | None = None,
     nonnegative: bool = True,
     smoothing_tau: float | None = None,
-    intersection_reduction: str = "sum",
-    difference_reduction: str = "subtractmatch",
+    intersection_reduction: Literal["sum", "mean", "product"] = "sum",
+    difference_reduction: Literal["ignorematch", "subtractmatch"] = "subtractmatch",
     match_threshold: float = 0.0,
 ) -> torch.Tensor:
     """Compute pairwise Tversky similarities between inputs and prototypes.
@@ -238,7 +241,7 @@ def tversky_attributions(  # noqa: PLR0913
     # alpha/beta are not used to compute components themselves; they are included for API symmetry
     alpha: float = 0.5,
     beta: float = 0.5,
-    difference_reduction: str = "subtractmatch",
+    difference_reduction: Literal["ignorematch", "subtractmatch"] = "subtractmatch",
     match_threshold: float = 0.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return per-feature contributions for intersection and distinctive parts.
@@ -310,7 +313,7 @@ def tversky_attributions(  # noqa: PLR0913
         x_b, y_b = torch.broadcast_tensors(x, y)
         stacked = torch.stack((x_b, y_b), dim=-1)  # (..., D, 2)
         soft_min = -tau * torch.logsumexp(-stacked / tau, dim=-1)
-        # Shift so that for nonnegative inputs, components remain nonnegative
+        # Add shift to keep components nonnegative and consistent with similarity
         i_components = soft_min + tau * math.log(2.0)
         a_components = tau * F.softplus((x_b - y_b) / tau)
         b_components = tau * F.softplus((y_b - x_b) / tau)
@@ -372,9 +375,9 @@ class TverskyProjection(nn.Module):
         learnable_beta: bool = False,
         alpha_beta_normalize: bool = False,
         temperature: float | None = None,
-        prototype_init: str = "xavier",
-        intersection_reduction: str = "product",
-        difference_reduction: str = "subtractmatch",
+        prototype_init: Literal["xavier", "kaiming"] = "xavier",
+        intersection_reduction: Literal["sum", "mean", "product"] = "sum",
+        difference_reduction: Literal["ignorematch", "subtractmatch"] = "subtractmatch",
         match_threshold: float = 0.0,
     ) -> None:
         super().__init__()
@@ -453,9 +456,9 @@ class TverskyProjection(nn.Module):
         sims = pairwise_tversky(
             x,
             self.weight,
-            alpha=float(alpha.item()),
-            beta=float(beta.item()),
-            theta=float(self.theta.item()),
+            alpha=alpha,
+            beta=beta,
+            theta=self.theta,
             input_transform=self.input_transform,
             nonnegative=self.nonnegative,
             smoothing_tau=self.smoothing_tau,
@@ -485,7 +488,7 @@ class TverskyProjection(nn.Module):
             beta_pos = self.beta
 
         if self.alpha_beta_normalize:
-            denom = alpha_pos + beta_pos
+            denom = (alpha_pos + beta_pos).clamp_min(torch.finfo(alpha_pos.dtype).eps)
             # denom should be > 0 due to softplus or positive buffers; guard anyway
             alpha_pos = alpha_pos / denom
             beta_pos = beta_pos / denom

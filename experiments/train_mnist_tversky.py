@@ -15,6 +15,7 @@ and reduction strategies.
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import time
 
@@ -30,6 +31,11 @@ from mlp_utils.layers.mlp import MLP
 IMAGE_NDIM = 4
 IMAGE_CHANNELS = 1
 IMAGE_SIZE = 28
+
+logger = logging.getLogger(__name__)
+
+MNIST_DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+os.makedirs(MNIST_DATA_DIR, exist_ok=True)
 
 
 def patchify_images(images: Tensor, patch_size: int) -> Tensor:
@@ -88,7 +94,7 @@ class MNISTTverskyClassifier(nn.Module):
         nonnegative: bool = True,
         smoothing_tau: float | None = None,
         prototype_init: str = "xavier",
-        intersection_reduction: str = "product",
+        intersection_reduction: str = "sum",
         difference_reduction: str = "subtractmatch",
         match_threshold: float = 0.0,
         temperature: float | None = None,
@@ -266,17 +272,17 @@ def train(  # noqa: PLR0913
     seed_prototypes: bool,
     seed_samples_per_class: int,
 ) -> None:
-    """Trains the MNIST Tversky demo and prints validation/test metrics."""
+    """Trains the MNIST Tversky demo and logs validation/test metrics."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
     train_full = datasets.MNIST(
-        root="./data", train=True, download=True, transform=transform
+        root=MNIST_DATA_DIR, train=True, download=True, transform=transform
     )
     test_set = datasets.MNIST(
-        root="./data", train=False, download=True, transform=transform
+        root=MNIST_DATA_DIR, train=False, download=True, transform=transform
     )
 
     val_split = 0.1
@@ -331,7 +337,7 @@ def train(  # noqa: PLR0913
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
 
-    print(
+    logger.info(
         f"Training on {device} | epochs={epochs}, batch_size={batch_size}, lr={lr}, dim={dim}, P={patch_size}, "
         f"protos/class={num_prototypes_per_class}, pool={prototype_pool}"
     )
@@ -352,14 +358,14 @@ def train(  # noqa: PLR0913
             epoch_loss += loss.item()
         epoch_loss /= max(1, len(train_loader))
         val_loss, val_acc = evaluate(model, val_loader, device)
-        print(
+        logger.info(
             f"Epoch {epoch:03d} | train_loss={epoch_loss:.6f} | val_loss={val_loss:.6f} | val_acc={val_acc * 100:.2f}%"
         )
         best_val = min(best_val, val_loss)
 
     elapsed = time.time() - start_time
     test_loss, test_acc = evaluate(model, test_loader, device)
-    print(
+    logger.info(
         f"Done in {elapsed:.2f}s | best_val_loss={best_val:.6f} | test_loss={test_loss:.6f} | test_acc={test_acc * 100:.2f}%"
     )
 
@@ -369,7 +375,7 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
 
     Searches across a small space (lr, prototypes per class, pooling, transforms,
     reductions, and logit scaling). Reports validation accuracy per epoch and
-    returns the best configuration summary to stdout.
+    logs the best configuration summary.
     """
     try:
         from ray import tune  # noqa: PLC0415
@@ -423,10 +429,10 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
             [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
         )
         train_full = datasets.MNIST(
-            root="./data", train=True, download=True, transform=transform
+            root=MNIST_DATA_DIR, train=True, download=True, transform=transform
         )
         test_set = datasets.MNIST(
-            root="./data", train=False, download=True, transform=transform
+            root=MNIST_DATA_DIR, train=False, download=True, transform=transform
         )
 
         val_split = 0.1
@@ -495,10 +501,25 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
                 optimizer.step()
 
             val_loss, val_acc = evaluate(model, val_loader, device)
-            tune.report(val_loss=float(val_loss), val_acc=float(val_acc), epoch=epoch)
+            tune.report(
+                {"val_loss": float(val_loss), "val_acc": float(val_acc), "epoch": epoch}
+            )
 
         test_loss, test_acc = evaluate(model, test_loader, device)
-        tune.report(test_loss=float(test_loss), test_acc=float(test_acc))
+        # Ensure the scheduler's metric (val_acc) is present in the final report
+        val_loss_final, val_acc_final = evaluate(model, val_loader, device)
+        epoch_final = int(epochs)
+        tune.report(
+            {
+                "epoch": epoch_final,
+                "val_loss": float(val_loss_final),
+                "val_acc": float(val_acc_final),
+                "test_loss": float(test_loss),
+                "test_acc": float(test_acc),
+            }
+        )
+
+        # Note: returning a dict here is unnecessary; Tune consumes metrics via tune.report
 
     # Define search space
     search_space = {
@@ -529,11 +550,11 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         time_attr="epoch",
         metric="val_acc",
         mode="max",
-        grace_period=1,
+        grace_period=3,
         reduction_factor=2,
     )
 
-    resources = {"cpu": 2, "gpu": 1 if torch.cuda.is_available() else 0}
+    resources = {"cpu": 4, "gpu": 1 if torch.cuda.is_available() else 0}
 
     storage_uri = f"file://{os.path.abspath('./ray_results')}"
     analysis = tune.run(
@@ -548,8 +569,8 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
 
     best_config = analysis.get_best_config(metric="val_acc", mode="max")
     best_result = analysis.get_best_trial(metric="val_acc", mode="max", scope="all")
-    print("Best config:", best_config)
-    print("Best result:", best_result.metric_analysis.get("val_acc"))
+    logger.info(f"Best config: {best_config}")
+    logger.info(f"Best result: {best_result.metric_analysis.get('val_acc')}")
 
 
 def main() -> None:
@@ -558,7 +579,7 @@ def main() -> None:
     # Data/model
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=128)
-    parser.add_argument("--lr", type=float, default=1e-2)  # TNN guidance: 0.01
+    parser.add_argument("--lr", type=float, default=1e-2)
     parser.add_argument("--patch-size", type=int, default=4)
     parser.add_argument("--dim", type=int, default=128)
     parser.add_argument("--prototypes-per-class", type=int, default=1)
@@ -577,7 +598,7 @@ def main() -> None:
     parser.add_argument(
         "--intersection-reduction",
         choices=["sum", "mean", "product"],
-        default="product",
+        default="sum",
     )
     parser.add_argument(
         "--difference-reduction",
@@ -594,6 +615,8 @@ def main() -> None:
     parser.add_argument("--tune-samples", type=int, default=20)
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     if args.tune:
         perform_ray_tuning(args)
