@@ -27,6 +27,7 @@ __all__ = [
     "pairwise_tversky",
     "TverskyProjection",
     "tversky_attributions",
+    "TverskyFeatureSharing",
 ]
 
 
@@ -503,3 +504,126 @@ def _softplus_inverse(y: float) -> float:
     """
     # Using expm1 improves numerical stability for small y.
     return math.log(math.expm1(y))
+
+
+class TverskyFeatureSharing(nn.Module):
+    """Two-stage head with shared features followed by prototype similarities.
+
+    Stage 1 maps input vectors into a shared feature-membership space using a
+    first :class:`TverskyProjection`. Stage 2 scores those memberships against
+    a bank of feature-space prototypes using a second :class:`TverskyProjection`.
+
+    Shapes:
+        - Input: ``[..., D_in]``
+        - Stage 1 output (memberships): ``[..., M]`` where ``M=num_features``
+        - Final output: ``[..., K]`` where ``K=output_dim``
+
+    Notes:
+        - Defaults are chosen to mirror the paper's canonical setup: no bias,
+          no temperature, intersection reduced by sum, and differences included.
+        - The two stages accept independent hyperparameters for flexibility.
+    """
+
+    def __init__(  # noqa: PLR0913
+        self,
+        *,
+        input_dim: int,
+        num_features: int,
+        output_dim: int,
+        # Stage 1 (data -> features)
+        s1_alpha: float = 0.5,
+        s1_beta: float = 0.5,
+        s1_theta: float = 1e-7,
+        s1_input_transform: str
+        | Callable[[torch.Tensor], torch.Tensor]
+        | None = "clamp01",
+        s1_nonnegative: bool = True,
+        s1_smoothing_tau: float | None = None,
+        s1_intersection_reduction: Literal["sum", "mean", "product"] = "sum",
+        s1_difference_reduction: Literal[
+            "ignorematch", "subtractmatch"
+        ] = "subtractmatch",
+        s1_match_threshold: float = 0.0,
+        s1_bias: bool = False,
+        s1_temperature: float | None = None,
+        s1_prototype_init: Literal["xavier", "kaiming"] = "xavier",
+        # Stage 2 (features -> prototypes)
+        s2_alpha: float = 0.5,
+        s2_beta: float = 0.5,
+        s2_theta: float = 1e-7,
+        s2_input_transform: str
+        | Callable[[torch.Tensor], torch.Tensor]
+        | None = "clamp01",
+        s2_nonnegative: bool = True,
+        s2_smoothing_tau: float | None = None,
+        s2_intersection_reduction: Literal["sum", "mean", "product"] = "sum",
+        s2_difference_reduction: Literal[
+            "ignorematch", "subtractmatch"
+        ] = "subtractmatch",
+        s2_match_threshold: float = 0.0,
+        s2_bias: bool = False,
+        s2_temperature: float | None = None,
+        s2_prototype_init: Literal["xavier", "kaiming"] = "xavier",
+    ) -> None:
+        super().__init__()
+
+        # Stage 1: input_dim -> num_features
+        self.stage1 = TverskyProjection(
+            input_dim=input_dim,
+            output_dim=num_features,
+            alpha=s1_alpha,
+            beta=s1_beta,
+            theta=s1_theta,
+            bias=s1_bias,
+            input_transform=s1_input_transform,
+            nonnegative=s1_nonnegative,
+            smoothing_tau=s1_smoothing_tau,
+            temperature=s1_temperature,
+            prototype_init=s1_prototype_init,
+            intersection_reduction=s1_intersection_reduction,
+            difference_reduction=s1_difference_reduction,
+            match_threshold=s1_match_threshold,
+        )
+
+        # Stage 2: num_features -> output_dim
+        self.stage2 = TverskyProjection(
+            input_dim=num_features,
+            output_dim=output_dim,
+            alpha=s2_alpha,
+            beta=s2_beta,
+            theta=s2_theta,
+            bias=s2_bias,
+            input_transform=s2_input_transform,
+            nonnegative=s2_nonnegative,
+            smoothing_tau=s2_smoothing_tau,
+            temperature=s2_temperature,
+            prototype_init=s2_prototype_init,
+            intersection_reduction=s2_intersection_reduction,
+            difference_reduction=s2_difference_reduction,
+            match_threshold=s2_match_threshold,
+        )
+
+    def reset_parameters(self) -> None:
+        """Reset parameters of both stages."""
+        self.stage1.reset_parameters()
+        self.stage2.reset_parameters()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
+        """Compute membership with Stage 1, then prototype scores with Stage 2."""
+        memberships = self.stage1(x)
+        return self.stage2(memberships)
+
+    @torch.no_grad()
+    def get_feature_memberships(self, x: torch.Tensor) -> torch.Tensor:
+        """Return Stage 1 membership vector z(x) in feature space."""
+        return self.stage1(x)
+
+    def freeze_features(self, freeze: bool = True) -> None:
+        """Enable/disable gradient updates for Stage 1 parameters."""
+        for param in self.stage1.parameters():
+            param.requires_grad_(not freeze)
+
+    def freeze_head(self, freeze: bool = True) -> None:
+        """Enable/disable gradient updates for Stage 2 parameters."""
+        for param in self.stage2.parameters():
+            param.requires_grad_(not freeze)

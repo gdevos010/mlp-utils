@@ -25,7 +25,7 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 
-from mlp_utils.layers import TverskyProjection
+from mlp_utils.layers import TverskyFeatureSharing, TverskyProjection
 from mlp_utils.layers.mlp import MLP
 
 IMAGE_NDIM = 4
@@ -86,6 +86,8 @@ class MNISTTverskyClassifier(nn.Module):
         num_classes: int = 10,
         num_prototypes_per_class: int = 1,
         prototype_pool: str = "mean",  # {"mean", "max"}
+        feature_sharing: bool = False,
+        num_features: int | None = None,
         # TverskyProjection kwargs
         alpha: float = 0.5,
         beta: float = 0.5,
@@ -109,24 +111,63 @@ class MNISTTverskyClassifier(nn.Module):
         self.num_classes = int(num_classes)
         self.num_prototypes_per_class = int(num_prototypes_per_class)
         self.prototype_pool = prototype_pool
+        self.feature_sharing = bool(feature_sharing)
 
         total_prototypes = int(num_classes) * int(num_prototypes_per_class)
-        self.tversky_head = TverskyProjection(
-            input_dim=dim,
-            output_dim=total_prototypes,
-            alpha=alpha,
-            beta=beta,
-            theta=theta,
-            bias=bias,
-            input_transform=input_transform,
-            nonnegative=nonnegative,
-            smoothing_tau=smoothing_tau,
-            prototype_init=prototype_init,
-            intersection_reduction=intersection_reduction,
-            difference_reduction=difference_reduction,
-            match_threshold=match_threshold,
-            temperature=temperature,
-        )
+        if self.feature_sharing:
+            # Use provided num_features if positive, else default to dim
+            feature_count = (
+                int(num_features)
+                if (num_features is not None and int(num_features) > 0)
+                else int(dim)
+            )
+            self.tversky_head = TverskyFeatureSharing(
+                input_dim=dim,
+                num_features=feature_count,
+                output_dim=total_prototypes,
+                s1_alpha=alpha,
+                s1_beta=beta,
+                s1_theta=theta,
+                s1_input_transform=input_transform,
+                s1_nonnegative=nonnegative,
+                s1_smoothing_tau=smoothing_tau,
+                s1_prototype_init=prototype_init,
+                s1_intersection_reduction=intersection_reduction,
+                s1_difference_reduction=difference_reduction,
+                s1_match_threshold=match_threshold,
+                s1_temperature=temperature if temperature is not None else None,
+                s1_bias=bias,
+                # Stage 2 mirrors defaults; can be customized later if needed
+                s2_alpha=alpha,
+                s2_beta=beta,
+                s2_theta=theta,
+                s2_input_transform="clamp01",
+                s2_nonnegative=True,
+                s2_smoothing_tau=None,
+                s2_prototype_init=prototype_init,
+                s2_intersection_reduction=intersection_reduction,
+                s2_difference_reduction=difference_reduction,
+                s2_match_threshold=match_threshold,
+                s2_temperature=None,
+                s2_bias=False,
+            )
+        else:
+            self.tversky_head = TverskyProjection(
+                input_dim=dim,
+                output_dim=total_prototypes,
+                alpha=alpha,
+                beta=beta,
+                theta=theta,
+                bias=bias,
+                input_transform=input_transform,
+                nonnegative=nonnegative,
+                smoothing_tau=smoothing_tau,
+                prototype_init=prototype_init,
+                intersection_reduction=intersection_reduction,
+                difference_reduction=difference_reduction,
+                match_threshold=match_threshold,
+                temperature=temperature,
+            )
 
     def forward(self, images: Tensor) -> Tensor:
         """Compute class logits from input images.
@@ -235,8 +276,25 @@ def seed_prototypes_from_dataset(
                 per_class_feats[c].append(vec.detach().cpu())
 
     # Assign into prototype weights
-    weight = model.tversky_head.weight  # [C*P, D]
-    feat_dim = weight.shape[1]
+    # Handle single-stage vs feature-sharing head
+    if isinstance(model.tversky_head, TverskyFeatureSharing):
+        weight = model.tversky_head.stage2.weight  # [C*P, M]
+        assign_dim = weight.shape[1]
+
+        # We will seed using Stage 1 memberships z(x)
+        def to_seed_vec(vec: Tensor) -> Tensor:
+            # vec is pooled feature in data space [D]
+            mem = model.tversky_head.get_feature_memberships(vec.unsqueeze(0)).squeeze(
+                0
+            )
+            return mem.detach().cpu()
+    else:
+        weight = model.tversky_head.weight  # [C*P, D]
+        assign_dim = weight.shape[1]
+
+        def to_seed_vec(vec: Tensor) -> Tensor:
+            return vec.detach().cpu()
+
     for c in range(num_classes):
         feats = per_class_feats[c]
         if not feats:
@@ -244,8 +302,9 @@ def seed_prototypes_from_dataset(
             feats = [torch.zeros(feat_dim)]
         for k in range(protos_per_class):
             idx = c * protos_per_class + k
-            src = feats[k % len(feats)].to(weight.dtype)
-            weight[idx].copy_(src[:feat_dim])
+            base_vec = feats[k % len(feats)]
+            src = to_seed_vec(base_vec).to(weight.dtype)
+            weight[idx].copy_(src[:assign_dim])
 
 
 def train(  # noqa: PLR0913
@@ -257,6 +316,8 @@ def train(  # noqa: PLR0913
     dim: int,
     num_prototypes_per_class: int,
     prototype_pool: str,
+    feature_sharing: bool,
+    num_features: int,
     alpha: float,
     beta: float,
     theta: float,
@@ -312,6 +373,8 @@ def train(  # noqa: PLR0913
         num_classes=10,
         num_prototypes_per_class=num_prototypes_per_class,
         prototype_pool=prototype_pool,
+        feature_sharing=feature_sharing,
+        num_features=num_features,
         alpha=alpha,
         beta=beta,
         theta=theta,
@@ -464,6 +527,8 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
             num_classes=10,
             num_prototypes_per_class=num_prototypes_per_class,
             prototype_pool=prototype_pool,
+            feature_sharing=bool(config.get("feature_sharing", args.feature_sharing)),
+            num_features=int(config.get("num_features", args.num_features)),
             alpha=alpha,
             beta=beta,
             theta=theta,
@@ -526,6 +591,8 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         "lr": tune.loguniform(1e-3, 3e-2),
         "prototypes_per_class": tune.choice([1, 2, 4]),
         "prototype_pool": tune.choice(["mean", "max"]),
+        "feature_sharing": tune.choice([False, True]),
+        "num_features": tune.choice([64, 128, 256]),
         "alpha": tune.choice([0.3, 0.5, 0.7]),
         "beta": tune.choice([0.3, 0.5, 0.7]),
         "intersection_reduction": tune.choice(["sum", "mean"]),
@@ -584,6 +651,8 @@ def main() -> None:
     parser.add_argument("--dim", type=int, default=128)
     parser.add_argument("--prototypes-per-class", type=int, default=1)
     parser.add_argument("--prototype-pool", choices=["mean", "max"], default="mean")
+    parser.add_argument("--feature-sharing", action="store_true", default=False)
+    parser.add_argument("--num-features", type=int, default=128)
     # Tversky params
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--beta", type=float, default=0.5)
@@ -629,6 +698,8 @@ def main() -> None:
             dim=args.dim,
             num_prototypes_per_class=args.prototypes_per_class,
             prototype_pool=args.prototype_pool,
+            feature_sharing=args.feature_sharing,
+            num_features=args.num_features,
             alpha=args.alpha,
             beta=args.beta,
             theta=args.theta,
