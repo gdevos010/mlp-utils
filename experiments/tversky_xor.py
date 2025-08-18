@@ -42,17 +42,43 @@ def make_xor_dataset(repeats: int = 32) -> tuple[torch.Tensor, torch.Tensor]:
 
 def train_xor(
     steps: int = 200,
-    lr: float = 0.5,
+    lr: float = 0.1,
     seed: int = 1234,
+    optimizer: str = "adam",
 ) -> tuple[float, float]:
     """Train for a small number of steps and return (accuracy, elapsed_seconds)."""
     torch.manual_seed(seed)
     feats, labels = make_xor_dataset()
 
+    # Use a slightly overcomplete prototype bank followed by a linear readout
     model = torch.nn.Sequential(
-        TverskyProjection(2, 2, input_transform="clamp01", nonnegative=True),
+        TverskyProjection(
+            2,
+            4,
+            input_transform="clamp01",
+            nonnegative=True,
+            bias=True,
+        ),
+        torch.nn.Linear(4, 2, bias=True),
     )
-    opt = torch.optim.SGD(model.parameters(), lr=lr)
+
+    # Prototype initialization at XOR corners to break symmetry and speed up learning
+    with torch.no_grad():
+        proj: TverskyProjection = model[0]  # type: ignore[assignment]
+        corner_prototypes = torch.tensor(
+            [
+                [0.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [1.0, 1.0],
+            ],
+            dtype=proj.weight.dtype,
+        )
+        proj.weight.copy_(corner_prototypes)
+    if optimizer == "sgd":
+        opt = torch.optim.SGD(model.parameters(), lr=lr)
+    else:
+        opt = torch.optim.Adam(model.parameters(), lr=lr)
 
     start = time.time()
     for _ in range(steps):
@@ -73,12 +99,13 @@ def main() -> None:
     """Entry point: parse args, train, and print summary."""
     parser = argparse.ArgumentParser(description="TverskyProjection XOR example")
     parser.add_argument("--steps", type=int, default=200)
-    parser.add_argument("--lr", type=float, default=0.5)
+    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument("--opt", type=str, choices=["adam", "sgd"], default="adam")
     args = parser.parse_args()
 
-    acc, elapsed = train_xor(steps=args.steps, lr=args.lr)
+    acc, elapsed = train_xor(steps=args.steps, lr=args.lr, optimizer=args.opt)
     print(
-        f"Final accuracy: {acc:.3f} | Elapsed: {elapsed:.3f}s | steps={args.steps}, lr={args.lr}"
+        f"Final accuracy: {acc:.3f} | Elapsed: {elapsed:.3f}s | steps={args.steps}, lr={args.lr}, opt={args.opt}"
     )
 
 

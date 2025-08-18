@@ -29,23 +29,26 @@ __all__ = [
 ]
 
 
-def tversky_similarity(  # noqa: PLR0913, PLR0912
+def tversky_similarity(  # noqa: C901, PLR0913, PLR0912, PLR0915
     input: torch.Tensor,  # noqa: A002
     prototype: torch.Tensor,
     *,
     alpha: float = 0.5,
     beta: float = 0.5,
-    eps: float = 1e-6,
+    theta: float = 1e-7,
     input_transform: str | Callable[[torch.Tensor], torch.Tensor] | None = None,
     nonnegative: bool = True,
     smoothing_tau: float | None = None,
+    intersection_reduction: str = "sum",
+    difference_reduction: str = "subtractmatch",
+    match_threshold: float = 0.0,
 ) -> torch.Tensor:
     """Compute the (differentiable) Tversky similarity between two tensors.
 
     Uses per-feature proxy set operations to estimate intersection and distinct
     parts, then applies the Tversky similarity:
 
-        S = (I + eps) / (I + alpha * A_only + beta * B_only + eps)
+        S = (I + theta) / (I + alpha * A_only + beta * B_only + theta)
 
     where I = sum(min(x, y)), A_only = sum(relu(x - y)), B_only = sum(relu(y - x)).
     Optional smoothing via `smoothing_tau` replaces hard min and ReLU with smooth
@@ -56,7 +59,7 @@ def tversky_similarity(  # noqa: PLR0913, PLR0912
         prototype: Prototype tensor of shape (..., D), broadcastable with `input`.
         alpha: Weight for input-only mass.
         beta: Weight for prototype-only mass.
-        eps: Numerical stability constant added to numerator/denominator.
+        theta: Numerical stability constant added to numerator/denominator.
         input_transform: Optional transform applied before set-op proxies. One of
             None, "relu", "clamp01", "sigmoid", or a callable. If provided, it
             supersedes `nonnegative`.
@@ -64,6 +67,14 @@ def tversky_similarity(  # noqa: PLR0913, PLR0912
             nonnegative via ReLU.
         smoothing_tau: Optional temperature for smoothed proxies; if provided,
             must be > 0.
+        intersection_reduction: How to aggregate intersection over features.
+            One of {"sum", "mean", "product"}. Default: "sum".
+        difference_reduction: How to treat distinctive parts. One of
+            {"subtractmatch", "ignorematch"}. "ignorematch" discards difference
+            contributions at feature positions where both input and prototype are
+            present (> ``match_threshold``).
+        match_threshold: Threshold used to determine feature presence when
+            ``difference_reduction='ignorematch'``.
 
     Returns:
         Tensor containing similarity scores with shape equal to the broadcasted
@@ -112,22 +123,53 @@ def tversky_similarity(  # noqa: PLR0913, PLR0912
 
     # Hard vs smoothed set-operation proxies
     if smoothing_tau is None:
-        intersection = torch.minimum(x, y).sum(dim=-1)
-        a_only = F.relu(x - y).sum(dim=-1)
-        b_only = F.relu(y - x).sum(dim=-1)
+        i_components = torch.minimum(x, y)
+        a_components = F.relu(x - y)
+        b_components = F.relu(y - x)
     else:
         tau = float(smoothing_tau)
+        # Ensure shapes match for stacking in broadcasting scenarios
+        x_b, y_b = torch.broadcast_tensors(x, y)
         # Smooth minimum via soft-min: -tau * logsumexp([-x/tau, -y/tau])
-        stacked = torch.stack((x, y), dim=-1)  # (..., D, 2)
+        stacked = torch.stack((x_b, y_b), dim=-1)  # (..., D, 2)
         soft_min = -tau * torch.logsumexp(-stacked / tau, dim=-1)  # (..., D)
-        intersection = soft_min.sum(dim=-1)
+        i_components = soft_min
 
         # Smooth ReLU via tau * softplus((z)/tau)
-        a_only = (tau * F.softplus((x - y) / tau)).sum(dim=-1)
-        b_only = (tau * F.softplus((y - x) / tau)).sum(dim=-1)
+        a_components = tau * F.softplus((x_b - y_b) / tau)
+        b_components = tau * F.softplus((y_b - x_b) / tau)
 
-    similarity = (intersection + eps) / (
-        intersection + alpha * a_only + beta * b_only + eps
+    # Apply difference handling option
+    if difference_reduction not in {"subtractmatch", "ignorematch"}:
+        raise ValueError(
+            "difference_reduction must be one of 'subtractmatch' or 'ignorematch'"
+        )
+    if difference_reduction == "ignorematch":
+        # Ignore difference contributions where both are present beyond threshold
+        # Work on broadcast-aligned shapes
+        x_b, y_b = torch.broadcast_tensors(x, y)
+        both_present = (x_b > match_threshold) & (y_b > match_threshold)
+        a_components = a_components * (~both_present).to(a_components.dtype)
+        b_components = b_components * (~both_present).to(b_components.dtype)
+
+    # Aggregate across feature dimension
+    if intersection_reduction not in {"sum", "mean", "product"}:
+        raise ValueError(
+            "intersection_reduction must be one of 'sum', 'mean', or 'product'"
+        )
+    if intersection_reduction == "sum":
+        intersection = i_components.sum(dim=-1)
+    elif intersection_reduction == "mean":
+        intersection = i_components.mean(dim=-1)
+    else:  # product
+        # Product can underflow quickly; keep as-is but clamp to non-negative
+        intersection = i_components.clamp_min(0.0).prod(dim=-1)
+
+    a_only = a_components.sum(dim=-1)
+    b_only = b_components.sum(dim=-1)
+
+    similarity = (intersection + theta) / (
+        intersection + alpha * a_only + beta * b_only + theta
     )
     return similarity
 
@@ -138,10 +180,13 @@ def pairwise_tversky(  # noqa: PLR0913
     *,
     alpha: float = 0.5,
     beta: float = 0.5,
-    eps: float = 1e-6,
+    theta: float = 1e-7,
     input_transform: str | Callable[[torch.Tensor], torch.Tensor] | None = None,
     nonnegative: bool = True,
     smoothing_tau: float | None = None,
+    intersection_reduction: str = "sum",
+    difference_reduction: str = "subtractmatch",
+    match_threshold: float = 0.0,
 ) -> torch.Tensor:
     """Compute pairwise Tversky similarities between inputs and prototypes.
 
@@ -153,10 +198,13 @@ def pairwise_tversky(  # noqa: PLR0913
         prototypes: Tensor of shape ``[K, D]`` where each row is a prototype.
         alpha: Weight for input-only mass.
         beta: Weight for prototype-only mass.
-        eps: Numerical stability constant.
+        theta: Numerical stability constant.
         input_transform: Optional transform applied before proxy set operations.
         nonnegative: If True and no explicit transform is provided, clamp to nonnegative.
         smoothing_tau: Optional temperature for smoothed proxies; if provided, must be > 0.
+        intersection_reduction: Feature aggregation for intersection term.
+        difference_reduction: Treatment of distinctive parts.
+        match_threshold: Presence threshold for 'ignorematch'.
 
     Returns:
         Tensor of shape ``[..., K]`` with similarity scores.
@@ -169,15 +217,18 @@ def pairwise_tversky(  # noqa: PLR0913
         prototypes_expanded,
         alpha=alpha,
         beta=beta,
-        eps=eps,
+        theta=theta,
         input_transform=input_transform,
         nonnegative=nonnegative,
         smoothing_tau=smoothing_tau,
+        intersection_reduction=intersection_reduction,
+        difference_reduction=difference_reduction,
+        match_threshold=match_threshold,
     )
     return sims
 
 
-def tversky_attributions(
+def tversky_attributions(  # noqa: PLR0913
     input: torch.Tensor,  # noqa: A002
     prototype: torch.Tensor,
     *,
@@ -187,6 +238,8 @@ def tversky_attributions(
     # alpha/beta are not used to compute components themselves; they are included for API symmetry
     alpha: float = 0.5,
     beta: float = 0.5,
+    difference_reduction: str = "subtractmatch",
+    match_threshold: float = 0.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return per-feature contributions for intersection and distinctive parts.
 
@@ -204,6 +257,9 @@ def tversky_attributions(
             :func:`tversky_similarity`.
         alpha: Unused parameter; included for API symmetry.
         beta: Unused parameter; included for API symmetry.
+        difference_reduction: If 'ignorematch', zero-out difference components
+            where both input and prototype are present (> ``match_threshold``).
+        match_threshold: Presence threshold for 'ignorematch'.
 
     Returns:
         Tuple ``(i_components, a_components, b_components)`` each of shape ``[..., D]``.
@@ -259,6 +315,16 @@ def tversky_attributions(
         a_components = tau * F.softplus((x_b - y_b) / tau)
         b_components = tau * F.softplus((y_b - x_b) / tau)
 
+    if difference_reduction not in {"subtractmatch", "ignorematch"}:
+        raise ValueError(
+            "difference_reduction must be one of 'subtractmatch' or 'ignorematch'"
+        )
+    if difference_reduction == "ignorematch":
+        x_b, y_b = torch.broadcast_tensors(x, y)
+        both_present = (x_b > match_threshold) & (y_b > match_threshold)
+        a_components = a_components * (~both_present).to(a_components.dtype)
+        b_components = b_components * (~both_present).to(b_components.dtype)
+
     return i_components, a_components, b_components
 
 
@@ -269,7 +335,7 @@ class TverskyProjection(nn.Module):
         input_dim: Feature dimension of inputs.
         output_dim: Number of prototypes (output channels).
         alpha, beta: Weights for distinctive parts in Tversky denominator. Stored as buffers.
-        eps: Numerical stability constant for similarity formula.
+        theta: Numerical stability constant for similarity formula.
         bias: If True, add a learnable bias of shape ``[output_dim]``.
         input_transform: Optional transform applied before proxy set operations.
         nonnegative: If True and no explicit transform is provided, clamp to nonnegative.
@@ -277,6 +343,13 @@ class TverskyProjection(nn.Module):
         learnable_alpha, learnable_beta: Reserved for future extension (not enabled yet).
         alpha_beta_normalize: Reserved for future extension to renormalize alpha/beta.
         temperature: Optional post-similarity scaling factor.
+        prototype_init: Prototype weight initialization. One of {"xavier",
+            "kaiming"}. Default: "xavier".
+        intersection_reduction: Feature aggregation for intersection. One of
+            {"sum", "mean", "product"}. Default: "sum".
+        difference_reduction: Treatment of distinctive parts. One of
+            {"subtractmatch", "ignorematch"}. Default: "subtractmatch".
+        match_threshold: Presence threshold for 'ignorematch'.
 
     Notes:
         - With ``bias=False`` and default ``temperature`` on nonnegative inputs, outputs lie in (0, 1].
@@ -290,7 +363,7 @@ class TverskyProjection(nn.Module):
         *,
         alpha: float = 0.5,
         beta: float = 0.5,
-        eps: float = 1e-6,
+        theta: float = 1e-7,
         bias: bool = False,
         input_transform: str | Callable[[torch.Tensor], torch.Tensor] | None = None,
         nonnegative: bool = True,
@@ -299,6 +372,10 @@ class TverskyProjection(nn.Module):
         learnable_beta: bool = False,
         alpha_beta_normalize: bool = False,
         temperature: float | None = None,
+        prototype_init: str = "xavier",
+        intersection_reduction: str = "product",
+        difference_reduction: str = "subtractmatch",
+        match_threshold: float = 0.0,
     ) -> None:
         super().__init__()
 
@@ -313,9 +390,9 @@ class TverskyProjection(nn.Module):
         else:
             self.bias = None
 
-        # Register eps so module.to(device) moves it
+        # Register theta so module.to(device) moves it
         default_dtype = torch.get_default_dtype()
-        self.register_buffer("eps", torch.tensor(float(eps), dtype=default_dtype))
+        self.register_buffer("theta", torch.tensor(float(theta), dtype=default_dtype))
 
         # Alpha/Beta either as learnable parameters (unconstrained) or fixed buffers
         if self.learnable_alpha:
@@ -333,35 +410,58 @@ class TverskyProjection(nn.Module):
         else:
             self.register_buffer("beta", torch.tensor(float(beta), dtype=default_dtype))
 
+        # Validate and store options
+        init_options = {"xavier", "kaiming"}
+        if prototype_init not in init_options:
+            raise ValueError("prototype_init must be one of 'xavier' or 'kaiming'")
+        if intersection_reduction not in {"sum", "mean", "product"}:
+            raise ValueError(
+                "intersection_reduction must be one of 'sum', 'mean', or 'product'"
+            )
+        if difference_reduction not in {"subtractmatch", "ignorematch"}:
+            raise ValueError(
+                "difference_reduction must be one of 'subtractmatch' or 'ignorematch'"
+            )
+
         self.input_transform = input_transform
         self.nonnegative = bool(nonnegative)
         self.smoothing_tau = float(smoothing_tau) if smoothing_tau is not None else None
         self.alpha_beta_normalize = bool(alpha_beta_normalize)
         self.temperature = float(temperature) if temperature is not None else None
+        self.prototype_init = prototype_init
+        self.intersection_reduction = intersection_reduction
+        self.difference_reduction = difference_reduction
+        self.match_threshold = float(match_threshold)
 
         # Initialize parameters similar to nn.Linear
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        """Initialize weights and optional bias with Kaiming-uniform heuristics."""
-        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        """Initialize weights and optional bias according to configuration."""
+        if self.prototype_init == "xavier":
+            nn.init.xavier_uniform_(self.weight)
+        else:
+            nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
-        """Forward pass (scaffold)."""
+        """Forward pass producing similarity scores per prototype."""
         alpha, beta = self._compute_alpha_beta()
         sims = pairwise_tversky(
             x,
             self.weight,
             alpha=float(alpha.item()),
             beta=float(beta.item()),
-            eps=float(self.eps.item()),
+            theta=float(self.theta.item()),
             input_transform=self.input_transform,
             nonnegative=self.nonnegative,
             smoothing_tau=self.smoothing_tau,
+            intersection_reduction=self.intersection_reduction,
+            difference_reduction=self.difference_reduction,
+            match_threshold=self.match_threshold,
         )
         if self.bias is not None:
             sims = sims + self.bias
