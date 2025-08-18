@@ -31,6 +31,8 @@ from mlp_utils.layers import (
     ResidualWrapper,
     SwiGLU,
     SwiMGLU,
+    TverskyProjection,
+    TverskyFeatureSharing,
 )
 
 # A simple check to see if torch.compile is available
@@ -211,3 +213,33 @@ class TestCompiledModules:
         output = compiled_model(input_tensor)
         assert output is not None
         assert output.shape == input_tensor.shape
+
+    def test_tversky_projection_compile(self) -> None:
+        """Verify that TverskyProjection can be compiled."""
+        in_dim, out_dim = 16, 8
+        model = TverskyProjection(
+            in_dim,
+            out_dim,
+            input_transform="clamp01",
+            nonnegative=True,
+        )
+        compiled_model = torch.compile(model)
+        input_tensor = torch.rand(4, in_dim)
+        output = compiled_model(input_tensor)
+        assert output is not None
+        assert output.shape == (4, out_dim)
+
+    def test_tversky_feature_sharing_compile(self) -> None:
+        """Verify that TverskyFeatureSharing can be compiled."""
+        model = TverskyFeatureSharing(
+            input_dim=12,
+            num_features=10,
+            output_dim=6,
+            s1_input_transform="clamp01",
+            s2_input_transform="clamp01",
+        )
+        compiled_model = torch.compile(model)
+        input_tensor = torch.rand(3, 12)
+        output = compiled_model(input_tensor)
+        assert output is not None
+        assert output.shape == (3, 6)

@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from mlp_utils.layers import (
     TverskyProjection,
+    TverskyFeatureSharing,
     pairwise_tversky,
     tversky_similarity,
     tversky_attributions,
@@ -178,6 +179,84 @@ def test_sequential_integration_forward_backward() -> None:
     loss.backward()
     proj: TverskyProjection = model[0]  # type: ignore[assignment]
     assert proj.weight.grad is not None and torch.isfinite(proj.weight.grad).all()
+
+
+def test_feature_sharing_shapes_and_gradients() -> None:
+    torch.manual_seed(21)
+    B, D_in, M, K = 5, 6, 7, 3
+    model = TverskyFeatureSharing(
+        input_dim=D_in,
+        num_features=M,
+        output_dim=K,
+        s1_input_transform="clamp01",
+        s2_input_transform="clamp01",
+    )
+    x = torch.rand(B, D_in, requires_grad=True)
+    y = model(x)
+    assert y.shape == (B, K)
+    loss = y.sum()
+    loss.backward()
+    # Gradients should flow to inputs and both stages
+    assert x.grad is not None and torch.isfinite(x.grad).all()
+    assert model.stage1.weight.grad is not None and torch.isfinite(model.stage1.weight.grad).all()
+    assert model.stage2.weight.grad is not None and torch.isfinite(model.stage2.weight.grad).all()
+
+
+def test_feature_sharing_membership_argmax_matches_identity_head() -> None:
+    torch.manual_seed(22)
+    D_in = 4
+    M = 4
+    K = 4
+    fs = TverskyFeatureSharing(
+        input_dim=D_in,
+        num_features=M,
+        output_dim=K,
+        s1_input_transform="clamp01",
+        s2_input_transform="clamp01",
+        s2_alpha=1.0,
+        s2_beta=0.0,
+        s2_bias=False,
+    )
+    with torch.no_grad():
+        fs.stage2.weight.copy_(torch.eye(M))
+    x = torch.rand(8, D_in)
+    z = fs.get_feature_memberships(x)
+    y = fs(x)
+    assert torch.equal(y.argmax(dim=-1), z.argmax(dim=-1))
+
+
+def test_feature_sharing_output_bounds_nonnegative_inputs() -> None:
+    torch.manual_seed(23)
+    B, D_in, M, K = 4, 5, 6, 3
+    fs = TverskyFeatureSharing(
+        input_dim=D_in,
+        num_features=M,
+        output_dim=K,
+        s1_input_transform="clamp01",
+        s2_input_transform="clamp01",
+        s1_bias=False,
+        s2_bias=False,
+    )
+    x = torch.rand(B, D_in)
+    y = fs(x)
+    assert y.min().item() >= -1e-7
+    assert y.max().item() <= 1.0 + 1e-7
+
+
+def test_feature_sharing_jit_trace() -> None:
+    torch.manual_seed(24)
+    fs = TverskyFeatureSharing(
+        input_dim=4,
+        num_features=5,
+        output_dim=3,
+        s1_input_transform="clamp01",
+        s2_input_transform="clamp01",
+    )
+    x = torch.rand(2, 4)
+    traced = torch.jit.trace(fs, x)
+    y_traced = traced(x)
+    y_eager = fs(x)
+    assert torch.allclose(y_traced, y_eager, rtol=1e-6, atol=1e-6)
 
 
 def test_smoothing_tau_approaches_hard_ops() -> None:

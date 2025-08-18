@@ -374,6 +374,32 @@ I_components, A_components, B_components = tversky_attributions(x, p, input_tran
 
 Example script: a tiny XOR demo with `TverskyProjection` is available at `experiments/tversky_xor.py`.
 
+### Tversky modules quickstart and tips
+
+- **tversky_similarity(input, prototype, ...)**: computes similarity in (0, 1], using proxy set ops over features. Shapes: `input[..., D]`, `prototype[..., D]` (broadcastable). Returns `[...,]`.
+- **pairwise_tversky(input, prototypes, ...)**: vectorized over prototypes, returning `[..., K]` for `prototypes[K, D]`.
+- **tversky_attributions(input, prototype, ...)**: returns per-feature components `(I_c, A_c, B_c)` whose sums match the numerator/denominator terms.
+- **TverskyProjection(D, K, ...)**: layer projecting to K prototypes; outputs `[..., K]`.
+- **TverskyFeatureSharing(...)**: two-stage variant with shared features followed by prototype scoring.
+
+Tips and gotchas:
+- **α/β asymmetry**: swapping inputs changes the similarity unless `alpha == beta`. Larger `alpha` penalizes input-only mass more; larger `beta` penalizes prototype-only mass more.
+- **θ stability**: `theta` is added to numerator and denominator; keep small but positive (default `1e-7`).
+- **Input transforms**: use `input_transform="clamp01"` for probabilities/memberships, `"relu"` for general nonnegative data, or `"sigmoid"` to squash unconstrained inputs. If set, it supersedes `nonnegative`.
+- **Smoothing τ**: `smoothing_tau > 0` enables smooth proxies that approach hard ops as τ→0; helpful for stability and gradient flow.
+- **Difference handling**: `difference_reduction="ignorematch"` zeros distinctive parts where both inputs exceed `match_threshold`.
+- **Intersection reduction**: choose among `sum`, `mean`, `product` (product can underflow on long D; prefer sum/mean unless needed).
+
+API reference (selected):
+
+| Symbol | Brief | Key args |
+| :-- | :-- | :-- |
+| `tversky_similarity(input, prototype, alpha=0.5, beta=0.5, ...)` | Scalar per pair | `input_transform`, `nonnegative`, `smoothing_tau`, `intersection_reduction`, `difference_reduction`, `match_threshold`, `theta` |
+| `pairwise_tversky(input, prototypes, ...)` | Vectorized across K | Same as above |
+| `tversky_attributions(input, prototype, ...)` | Featurewise I/A/B | Same as above |
+| `TverskyProjection(input_dim, output_dim, ...)` | Layer returning K similarities | `alpha`, `beta`, `theta`, `bias`, `input_transform`, `nonnegative`, `smoothing_tau`, `temperature`, `prototype_init`, `intersection_reduction`, `difference_reduction`, `match_threshold` |
+| `TverskyFeatureSharing(...)` | Two-stage feature sharing head | Stage-1/2 sets of the above |
+
 ```bibtex
 @inproceedings{Horuz2025TheRO,
     title   = {The Resurrection of the ReLU},

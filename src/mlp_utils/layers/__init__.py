@@ -20,8 +20,10 @@ from .pathweightedfff import PathWeightedFFF
 from .residual import ResidualWrapper
 from .switch_ffn import SwitchFFN
 from .tversky import (
+    TverskyFeatureSharing,
     TverskyProjection,
     pairwise_tversky,
     tversky_attributions,
     tversky_similarity,
 )
+from .tversky_explain import explain_similarity
