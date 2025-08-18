@@ -543,7 +543,7 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         scheduler=scheduler,
         num_samples=int(args.tune_samples),
         resources_per_trial=resources,
-        local_dir="./ray_results",
+        storage_path="./ray_results",
     )
 
     best_config = analysis.get_best_config(metric="val_acc", mode="max")
