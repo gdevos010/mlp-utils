@@ -36,14 +36,14 @@ Acceptance:
 ---
 
 ## Phase 1 — API stabilization and docs
-- [ ] Docstrings: ensure complete parameter/shape docs for `tversky.py` public APIs
-- [ ] README: add Tversky quickstart, tips (α/β asymmetry, θ stability, transforms, τ), examples links
-- [ ] Add small API reference table for TNN modules
-- [ ] Run tests: `pytest -q`
-- [ ] Commit: "tnn: docstrings and README quickstart/reference"
+- [x] Docstrings: ensure complete parameter/shape docs for `tversky.py` public APIs
+- [x] README: add Tversky quickstart, tips (α/β asymmetry, θ stability, transforms, τ), examples links
+- [x] Add small API reference table for TNN modules
+- [x] Run tests: `pytest -q`
+- [x] Commit: "tnn: docstrings and README quickstart/reference"
 
 Acceptance:
-- [ ] Docs readable; links valid; no behavior change; tests green
+- [x] Docs readable; links valid; no behavior change; tests green
 
 ---
 
