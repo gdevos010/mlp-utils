@@ -15,6 +15,7 @@ and reduction strategies.
 from __future__ import annotations
 
 import argparse
+import os
 import time
 
 import torch
@@ -534,6 +535,7 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
 
     resources = {"cpu": 2, "gpu": 1 if torch.cuda.is_available() else 0}
 
+    storage_uri = f"file://{os.path.abspath('./ray_results')}"
     analysis = tune.run(
         trainable,
         name="mnist_tversky_tune",
@@ -543,7 +545,7 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         scheduler=scheduler,
         num_samples=int(args.tune_samples),
         resources_per_trial=resources,
-        storage_path="./ray_results",
+        storage_path=storage_uri,
     )
 
     best_config = analysis.get_best_config(metric="val_acc", mode="max")
