@@ -1,123 +1,156 @@
-## Tversky NN Integration TODO Checklist
+ABOUTME: Actionable checklist for integrating and hardening Tversky neural modules.
+ABOUTME: Follows test-first, incremental steps; each item wires into repo without orphans.
 
-Reference: Tversky Neural Networks: Psychologically Plausible Deep Learning with Differentiable Tversky Similarity [arXiv:2506.11035](https://arxiv.org/abs/2506.11035)
+# Tversky Neural Network (TNN) Checklist
 
-Use this as a living checklist while implementing `tversky.py`, tests, docs, and examples.
+Reference: [Tversky Neural Networks: Psychologically Plausible Deep Learning with Differentiable Tversky Similarity](https://arxiv.org/html/2506.11035v1)
+
+## Repo integration targets (confirm before starting)
+- [ ] Confirm current branch is `feat/tnn-parity-tversky`
+- [ ] Activate env: `source /home/gdevos/structural_break/mlp-utils/.venv/bin/activate`
+- [ ] Code location: `src/mlp_utils/layers/tversky.py`
+- [ ] Public exports: `src/mlp_utils/layers/__init__.py`
+- [ ] Tests: `tests/test_tversky.py`
+- [ ] Docs: `README.md` (Layers section)
+- [ ] Examples: `experiments/tversky_xor.py`, `experiments/train_mnist_tversky.py`
+
+## Global invariants (apply to every change)
+- [ ] Add or extend a test first
+- [ ] Implement the minimal code for the test
+- [ ] Update public exports if needed
+- [ ] Update README and/or example scripts to reference new code (behind a flag if optional)
+- [ ] Run `pytest -q`; keep commits small and isolated
 
 ---
 
-### 1) Project scaffolding
-- [x] Create `src/mlp_utils/layers/tversky.py` with module docstring, `__all__`, and imports only.
-- [x] Add stubs for `tversky_similarity`, `pairwise_tversky`, `TverskyProjection` that raise `NotImplementedError`.
-- [x] Update `src/mlp_utils/layers/__init__.py` to import and expose symbols.
-- [x] Create `tests/test_tversky.py` with `pytest.skip("scaffold")` to avoid failures at start.
-- [x] Sanity: `pytest -q` runs with 0 failures (skipped ok).
+## Phase 0 — Baseline acceptance
+- [ ] Run all tests: `pytest -q`
+- [ ] Capture baseline coverage: `pytest --cov=mlp_utils --cov-report=term-missing`
+- [ ] Verify public API in README aligns with `src/mlp_utils/layers/__init__.py`
+- [ ] Commit: "tnn: record baseline tests and coverage"
 
 Acceptance:
-- [x] `from mlp_utils.layers import TverskyProjection` imports without side effects.
+- [ ] Tests green
+- [ ] Baseline metrics recorded
 
 ---
 
-### 2) Implement `tversky_similarity`
-- [x] Signature: `tversky_similarity(input, prototype, alpha=0.5, beta=0.5, eps=1e-6, input_transform=None, nonnegative=True, smoothing_tau=None)`.
-- [x] Implement input transform: support `None`, `"relu"`, `"clamp01"`, `"sigmoid"`, or callable; if set, it supersedes `nonnegative`.
-- [x] Hard set-proxy ops by default using `torch.minimum` and `F.relu`.
-- [x] Optional smoothing when `smoothing_tau>0`: soft-min for intersection (log-sum-exp) and `softplus(·/tau)` for differences.
-- [x] Validate and error on invalid `smoothing_tau ≤ 0`.
-- [x] Numerical stability: add `eps` to numerator and denominator; avoid NaN/Inf.
-- [x] Full type hints and a docstring including the similarity formula and semantics.
-
-Tests (unit):
-- [x] Identity/self-similarity: `S(x,x) ≈ 1` for random `x ≥ 0`; `x=0` edge-case → `1`.
-- [x] Asymmetry: `alpha ≠ beta` yields `S(x,y) ≠ S(y,x)` on a non-symmetric pair.
-- [x] Monotonicity: increased overlap raises similarity; verify ordering on controlled vectors.
-- [x] Range/boundedness: for nonnegative inputs and defaults, `S ∈ (0,1]` (also with smoothing).
-- [x] Input transforms: `relu` parity, `clamp01` range enforcement, `sigmoid` transform; callable support.
-- [x] Smoothing extremes: `tau→0` approximates hard ops within tolerance; stable for moderate `tau`.
-- [x] Numerical stability: zero vectors, disjoint vectors, large values → finite outputs.
-- [x] Gradients: `autograd.gradcheck` (double precision, small random positive inputs) passes.
-- [x] Dtype/device: CPU `float32`/`float64` equivalence within tolerance.
-- [x] Error handling: invalid `smoothing_tau` and unknown `input_transform` raise `ValueError`.
-
----
-
-### 3) Implement `pairwise_tversky`
-- [x] Vectorized computation over prototypes: `[B,D]×[K,D]→[B,K]`.
-- [x] Broadcasting support for leading dims: `[*,D]×[K,D]→[*,K]`.
-- [x] Forward parameters for `input_transform`, `nonnegative`, `smoothing_tau`, `alpha`, `beta`, `eps`.
-
-Tests (unit):
-- [x] Shapes for `[B,D]×[K,D]` and `[B,T,D]×[K,D]` produce `[B,K]` and `[B,T,K]`.
-- [x] Parity with Python loop over K within numeric tolerance.
-- [x] Gradients nonzero and finite w.r.t. inputs and prototypes.
-- [x] Dtype/device: CPU `float32/float64` parity.
-
----
-
-### 4) Implement `TverskyProjection` layer
-- [x] Constructor: `TverskyProjection(input_dim, output_dim, alpha=0.5, beta=0.5, eps=1e-6, bias=False, input_transform=None, nonnegative=True, smoothing_tau=None, learnable_alpha=False, learnable_beta=False, alpha_beta_normalize=False, temperature=None)`.
-- [x] Parameters: `weight` shape `[out,in]`; optional `bias` shape `[out]` (default off to preserve `(0,1]`).
-- [x] α/β handling: buffers by default; if learnable, register unconstrained params mapped via softplus to positive α/β.
-- [x] Optional `alpha_beta_normalize=True`: renormalize α and β so `α+β=1`.
-- [x] Forward: compute `pairwise_tversky(x, weight, ...)`, add optional bias, apply optional temperature scaling; preserve leading batch dims.
-- [x] Register buffers and dtypes/devices properly; ensure `.to(device)` moves α/β.
-- [x] Range semantics note in docstring: bias/temperature break strict `(0,1]` interpretation.
-
-Tests (module):
-- [x] Parameter shapes and registration (`weight`, `bias` when enabled).
-- [x] Forward shape preserved; values in `(0,1]` for defaults and nonnegative inputs.
-- [x] Learnable α/β positivity (softplus) and optional normalization (`≈1` sum).
-- [x] Training step reduces a simple loss; gradient flows to `weight` and learnable α/β if enabled.
-- [x] `state_dict` save/load roundtrip yields identical outputs.
-- [x] JIT/compile: `torch.jit.script` or `trace` forward works; optionally `torch.compile` if available.
-
----
-
-### 5) Implement `tversky_attributions` utility
-- [x] Function returns per-feature contributions for intersection and distinctive parts consistent with `tversky_similarity`.
-- [x] Works with both hard and smoothed proxies; respects `input_transform`.
-- [x] Clear docstring explaining outputs and intended visualization.
-
-Tests (utility):
-- [x] Shapes match input feature dimension.
-- [x] Nonnegativity of contributions under nonnegative inputs.
-- [x] Sum of components equals aggregate terms used in similarity calculation (within tolerance for smoothing).
-
----
-
-### 6) Integration and demos
-- [x] Mini model: `nn.Sequential(TverskyProjection, nn.Softmax)` runs forward/backward on random tensors; gradients propagate.
-- [x] XOR example: `experiments/tversky_xor.py` with 2D inputs and `output_dim=2`, fixed seeds, quick CPU run (<5s), prints loss/accuracy.
-
-Tests (integration):
-- [x] Tiny training loop reduces loss and achieves high accuracy (>90%) deterministically.
-
----
-
-### 7) Documentation
-- [x] Update `README.md` Layers section with `TverskyProjection` synopsis, construction snippet, and example forward pass.
-- [x] Add notes on similarity range semantics, bias/temperature effects, and interpretability.
-- [x] Link to paper: `[arXiv:2506.11035](https://arxiv.org/abs/2506.11035)`.
-- [x] Ensure docstrings include parameter meaning and equations where helpful.
+## Phase 1 — API stabilization and docs
+- [ ] Docstrings: ensure complete parameter/shape docs for `tversky.py` public APIs
+- [ ] README: add Tversky quickstart, tips (α/β asymmetry, θ stability, transforms, τ), examples links
+- [ ] Add small API reference table for TNN modules
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: docstrings and README quickstart/reference"
 
 Acceptance:
-- [x] README snippet imports and runs in a local Python shell.
+- [ ] Docs readable; links valid; no behavior change; tests green
 
 ---
 
-### 8) Test hygiene and CI
-- [x] Parametrize tests over dtypes (`float32`, `float64`), transforms, and select `smoothing_tau` values.
-- [x] Configure tolerances (`rtol`, `atol`) and avoid flaky comparisons.
-- [x] Mark heavier tests (gradcheck, XOR training) as `@pytest.mark.slow` and skip in default CI.
-- [x] Ensure `pytest -q` is green on CPU-only environment.
+## Phase 2 — Testing expansion and numerical robustness
+- [ ] Property tests (Hypothesis): bounds [0,1], asymmetry when α≠β, monotonicity in shared mass, broadcast shapes
+- [ ] Stress tests: extreme magnitudes, sparse patterns, degenerate pairs (zeros, disjoint)
+- [ ] Precision/dtypes: float32/float64 parity; large D; product reduction underflow guard
+- [ ] TorchCompile/AMP/JIT smoke: `TverskyProjection`, `TverskyFeatureSharing`
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: robustness and property-based tests"
+
+Acceptance:
+- [ ] New tests pass; coverage improves
 
 ---
 
-### 9) Final wiring
-- [x] Export all public APIs from `mlp_utils.layers` and verify they are importable.
-- [x] Confirm no orphaned code, no unused symbols, and clear `__all__` in `tversky.py`.
-- [x] Code readability: type hints, descriptive names, concise comments/docstrings.
-- [x] Run the full test suite locally; ensure zero failures.
+## Phase 3 — Interpretability and visualization
+- [ ] Add helper `explain_similarity(input, prototype)` that wraps `tversky_attributions` and returns named components with sums
+- [ ] Tests: shape and sum consistency vs `tversky_similarity`
+- [ ] Add optional plotting utils (matplotlib) in `experiments/utils_plot.py` (used only by examples)
+- [ ] Wire XOR example with `--plot` flag to generate I/A/B bars
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: explain helper and optional plotting"
 
-Done when:
-- [x] All checkboxes above are completed, tests are green, and README/docs accurately reflect the implemented APIs.
+Acceptance:
+- [ ] Helper tested; example produces figures when `--plot` is used
+
+---
+
+## Phase 4 — Initialization, seeding, and diversity regularization
+- [ ] Add `seed_prototypes_from_loader` (dataset-driven seeding by class; supports stage1 memberships when feature-sharing)
+- [ ] Tests: deterministic with fixed seed; weight shapes and assignments correct
+- [ ] Add `prototype_diversity_loss(weights, margin)` to penalize collapse
+- [ ] Tests: loss decreases with increased separation; zero on orthogonal prototypes (within tolerance)
+- [ ] Wire flags into MNIST example: `--seed-prototypes`, `--seed-samples-per-class`, `--diversity-margin`
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: seeding helper and diversity regularizer + example wiring"
+
+Acceptance:
+- [ ] Helpers tested; MNIST flags exercise new code; tests green
+
+---
+
+## Phase 5 — Training QoL (schedules and learnables)
+- [ ] Add τ schedule utilities (linear/cosine anneal) with unit tests for endpoints/monotonicity
+- [ ] Ensure learnable α/β are exposed per-prototype with optional α+β=1 normalization (tests: positivity, normalization)
+- [ ] Ensure learnable θ and match-threshold pathways are exposed and tested (positivity and effect on similarities)
+- [ ] Wire flags into XOR/MNIST (e.g., `--learnable-alpha`, `--learnable-beta`, `--alpha-beta-normalize`, `--learnable-theta`, `--learnable-match-threshold`, `--tau-schedule`)
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: schedules and learnable params + example flags"
+
+Acceptance:
+- [ ] Learnables and schedules tested; examples toggle features
+
+---
+
+## Phase 6 — Heads and pooling variants
+- [ ] Implement attention pooling over prototypes (tiny scorer MLP); tests for shapes/masking
+- [ ] Add `TverskyClassifierHead` wrapper (projection + pooling) with clean API
+- [ ] Replace direct pooling in MNIST with head wrapper (CLI switch `--prototype-pool {mean,max,attn}`)
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: attention pooling and classifier head"
+
+Acceptance:
+- [ ] Head tested; MNIST script switchable among pooling modes
+
+---
+
+## Phase 7 — Calibration and losses
+- [ ] Add `calibrate_temperature(logits, labels)` utility (held-out set); tests: NLL decreases or stays same
+- [ ] Add optional margin-style loss and/or label smoothing; smoke tests
+- [ ] Wire optional calibration/loss into examples behind flags
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: calibration utility and optional loss variants"
+
+Acceptance:
+- [ ] Calibration tested; examples show toggle effects
+
+---
+
+## Phase 8 — Monitoring and logging
+- [ ] Add logging helper to aggregate I/A/B, α/β histograms, prototype norms/overlaps per epoch
+- [ ] Tests: helper returns expected keys/shapes; handles feature-sharing and single-stage
+- [ ] Wire logging into XOR/MNIST with `--log-tnn-metrics` and optional TensorBoard
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: training-time metric logging"
+
+Acceptance:
+- [ ] Logs visible; unit tests pass
+
+---
+
+## Phase 9 — CI, packaging, and examples polish
+- [ ] Add CI workflow (GitHub Actions): lint + tests (CPU), small datasets cache; no GPU required
+- [ ] Optional: docs build check
+- [ ] README quickstart: end-to-end snippet using installed package path; verify from clean checkout
+- [ ] Run tests: `pytest -q`
+- [ ] Commit: "tnn: CI and examples polish"
+
+Acceptance:
+- [ ] CI green; examples runnable; docs linked
+
+---
+
+## Final wiring checklist (no orphaned code)
+- [ ] Every new function/class exported in `src/mlp_utils/layers/__init__.py` if public
+- [ ] Each new function/class has at least one unit test
+- [ ] README and/or examples reference new functionality (behind flags if optional)
+- [ ] Examples default to simple fast settings; advanced features are opt-in
+- [ ] Unified pass of `pytest -q` is green before merge
