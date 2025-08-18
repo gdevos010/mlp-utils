@@ -19,9 +19,9 @@ def test_tversky_projection_autocast_smoke() -> None:
     x = torch.rand(4, 16, device=device, requires_grad=True)
 
     dtype = torch.bfloat16 if not use_cuda else torch.float16
-    autocast = torch.cuda.amp.autocast if use_cuda else torch.cpu.amp.autocast
+    device_type = "cuda" if use_cuda else "cpu"
 
-    with autocast(dtype=dtype):
+    with torch.amp.autocast(device_type=device_type, dtype=dtype):
         y = proj(x)
         loss = y.sum()
     loss.backward()
@@ -47,9 +47,9 @@ def test_tversky_feature_sharing_autocast_smoke() -> None:
     x = torch.rand(3, 12, device=device, requires_grad=True)
 
     dtype = torch.bfloat16 if not use_cuda else torch.float16
-    autocast = torch.cuda.amp.autocast if use_cuda else torch.cpu.amp.autocast
+    device_type = "cuda" if use_cuda else "cpu"
 
-    with autocast(dtype=dtype):
+    with torch.amp.autocast(device_type=device_type, dtype=dtype):
         y = fs(x)
         loss = y.sum()
     loss.backward()
