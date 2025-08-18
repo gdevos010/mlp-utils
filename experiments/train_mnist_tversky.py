@@ -18,6 +18,7 @@ import argparse
 import logging
 import os
 import time
+import copy
 
 import torch
 
@@ -299,7 +300,7 @@ def seed_prototypes_from_dataset(
         feats = per_class_feats[c]
         if not feats:
             # Fallback to zeros if no samples collected (should not happen)
-            feats = [torch.zeros(feat_dim)]
+            feats = [torch.zeros(model.input_proj.out_features)]
         for k in range(protos_per_class):
             idx = c * protos_per_class + k
             base_vec = feats[k % len(feats)]
@@ -332,6 +333,10 @@ def train(  # noqa: PLR0913
     bias: bool,
     seed_prototypes: bool,
     seed_samples_per_class: int,
+    early_stop: bool = False,
+    early_stop_patience: int = 5,
+    early_stop_min_delta: float | None = 0.0,
+    early_stop_metric: str = "val_loss",
 ) -> None:
     """Trains the MNIST Tversky demo and logs validation/test metrics."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -406,6 +411,12 @@ def train(  # noqa: PLR0913
     )
 
     best_val = float("inf")
+    # Early stopping state
+    monitor_is_min = (early_stop_metric == "val_loss")
+    best_metric = float("inf") if monitor_is_min else float("-inf")
+    no_improve_epochs = 0
+    min_delta = 0.0 if (early_stop_min_delta is None) else float(early_stop_min_delta)
+    best_state = None
     start_time = time.time()
     for epoch in range(1, epochs + 1):
         model.train()
@@ -426,7 +437,27 @@ def train(  # noqa: PLR0913
         )
         best_val = min(best_val, val_loss)
 
+        # Update early stopping
+        current_metric = val_loss if monitor_is_min else val_acc
+        improved = (
+            (current_metric < (best_metric - min_delta)) if monitor_is_min else (current_metric > (best_metric + min_delta))
+        )
+        if improved:
+            best_metric = current_metric
+            no_improve_epochs = 0
+            best_state = copy.deepcopy(model.state_dict())
+        else:
+            no_improve_epochs += 1
+
+        if early_stop and no_improve_epochs >= int(early_stop_patience):
+            logger.info(
+                f"Early stopping at epoch {epoch:03d} | metric={early_stop_metric} | best={best_metric:.6f}"
+            )
+            break
+
     elapsed = time.time() - start_time
+    if best_state is not None:
+        model.load_state_dict(best_state)
     test_loss, test_acc = evaluate(model, test_loader, device)
     logger.info(
         f"Done in {elapsed:.2f}s | best_val_loss={best_val:.6f} | test_loss={test_loss:.6f} | test_acc={test_acc * 100:.2f}%"
@@ -487,6 +518,10 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         bias = bool(config.get("bias", args.bias))
         seed_protos = bool(config.get("seed_prototypes", args.seed_prototypes))
         seed_k = int(config.get("seed_samples_per_class", args.seed_samples_per_class))
+        early_stop = bool(config.get("early_stop", args.early_stop))
+        early_stop_patience = int(config.get("early_stop_patience", args.early_stop_patience))
+        early_stop_min_delta = float(config.get("early_stop_min_delta", args.early_stop_min_delta if args.early_stop_min_delta is not None else 0.0))
+        early_stop_metric = str(config.get("early_stop_metric", args.early_stop_metric))
 
         transform = transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
@@ -554,6 +589,13 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         loss_fn = nn.CrossEntropyLoss()
 
+        # Early stopping state
+        monitor_is_min = (early_stop_metric == "val_loss")
+        best_metric = float("inf") if monitor_is_min else float("-inf")
+        no_improve_epochs = 0
+        min_delta = float(early_stop_min_delta)
+        best_state = None
+
         for epoch in range(1, epochs + 1):
             model.train()
             for images_batch, targets_batch in train_loader:
@@ -570,6 +612,23 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
                 {"val_loss": float(val_loss), "val_acc": float(val_acc), "epoch": epoch}
             )
 
+            # Update early stopping
+            current_metric = float(val_loss) if monitor_is_min else float(val_acc)
+            improved = (
+                (current_metric < (best_metric - min_delta)) if monitor_is_min else (current_metric > (best_metric + min_delta))
+            )
+            if improved:
+                best_metric = current_metric
+                no_improve_epochs = 0
+                best_state = copy.deepcopy(model.state_dict())
+            else:
+                no_improve_epochs += 1
+
+            if early_stop and no_improve_epochs >= early_stop_patience:
+                break
+
+        if best_state is not None:
+            model.load_state_dict(best_state)
         test_loss, test_acc = evaluate(model, test_loader, device)
         # Ensure the scheduler's metric (val_acc) is present in the final report
         val_loss_final, val_acc_final = evaluate(model, val_loader, device)
@@ -682,6 +741,15 @@ def main() -> None:
     # Ray Tune options
     parser.add_argument("--tune", action="store_true", default=False)
     parser.add_argument("--tune-samples", type=int, default=20)
+    # Early stopping
+    parser.add_argument("--early-stop", action="store_true", default=False)
+    parser.add_argument("--early-stop-patience", type=int, default=5)
+    parser.add_argument("--early-stop-min-delta", type=float, default=0.0)
+    parser.add_argument(
+        "--early-stop-metric",
+        choices=["val_loss", "val_acc"],
+        default="val_loss",
+    )
 
     args = parser.parse_args()
 
@@ -716,6 +784,10 @@ def main() -> None:
             bias=args.bias,
             seed_prototypes=args.seed_prototypes,
             seed_samples_per_class=args.seed_samples_per_class,
+            early_stop=args.early_stop,
+            early_stop_patience=args.early_stop_patience,
+            early_stop_min_delta=args.early_stop_min_delta,
+            early_stop_metric=args.early_stop_metric,
         )
 
 

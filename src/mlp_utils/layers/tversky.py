@@ -16,6 +16,7 @@ import math
 
 from collections.abc import Callable
 from typing import Literal
+from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
@@ -28,8 +29,136 @@ __all__ = [
     "TverskyProjection",
     "tversky_attributions",
     "TverskyFeatureSharing",
+    "TverskySimilarityConfig",
+    "TverskyProjectionConfig",
+    "TverskyFeatureSharingConfig",
 ]
 
+
+@dataclass(slots=True)
+class TverskySimilarityConfig:
+    """Configuration for Tversky similarity computation.
+
+    ABOUTME: Typed config making Tversky similarity behavior explicit and reusable.
+    ABOUTME: Used to construct layers or call functions in a consistent manner.
+    """
+
+    alpha: float = 0.5
+    beta: float = 0.5
+    theta: float = 1e-7
+    input_transform: str | None = None
+    nonnegative: bool = True
+    smoothing_tau: float | None = None
+    intersection_reduction: Literal["sum", "mean", "product"] = "sum"
+    difference_reduction: Literal["ignorematch", "subtractmatch"] = "subtractmatch"
+    match_threshold: float = 0.0
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TverskySimilarityConfig":
+        return cls(**data)
+
+    def to_kwargs(self) -> dict:
+        return {
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "theta": self.theta,
+            "input_transform": self.input_transform,
+            "nonnegative": self.nonnegative,
+            "smoothing_tau": self.smoothing_tau,
+            "intersection_reduction": self.intersection_reduction,
+            "difference_reduction": self.difference_reduction,
+            "match_threshold": self.match_threshold,
+        }
+
+
+@dataclass(slots=True)
+class TverskyProjectionConfig:
+    """Configuration for :class:`TverskyProjection`.
+
+    ABOUTME: Encapsulates all constructor options to ease reproducibility.
+    ABOUTME: Provides utility methods to instantiate a module from config.
+    """
+
+    input_dim: int = 1
+    output_dim: int = 1
+    # Similarity options
+    similarity: TverskySimilarityConfig = field(default_factory=TverskySimilarityConfig)
+    # Layer options
+    bias: bool = False
+    learnable_alpha: bool = False
+    learnable_beta: bool = False
+    alpha_beta_normalize: bool = False
+    temperature: float | None = None
+    # Initialization: string key or a callable initializer
+    prototype_init: (
+        Literal["xavier", "kaiming"] | Callable[[torch.Tensor], None]
+    ) = "xavier"
+    # Optional learnable variants
+    learnable_theta: bool = False
+    learnable_match_threshold: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TverskyProjectionConfig":
+        sim = data.get("similarity")
+        if isinstance(sim, dict):
+            data = {**data, "similarity": TverskySimilarityConfig.from_dict(sim)}
+        return cls(**data)
+
+    def to_kwargs(self) -> dict:
+        return {
+            "input_dim": self.input_dim,
+            "output_dim": self.output_dim,
+            "alpha": self.similarity.alpha,
+            "beta": self.similarity.beta,
+            "theta": self.similarity.theta,
+            "bias": self.bias,
+            "input_transform": self.similarity.input_transform,
+            "nonnegative": self.similarity.nonnegative,
+            "smoothing_tau": self.similarity.smoothing_tau,
+            "learnable_alpha": self.learnable_alpha,
+            "learnable_beta": self.learnable_beta,
+            "alpha_beta_normalize": self.alpha_beta_normalize,
+            "temperature": self.temperature,
+            "prototype_init": self.prototype_init,
+            "intersection_reduction": self.similarity.intersection_reduction,
+            "difference_reduction": self.similarity.difference_reduction,
+            "match_threshold": self.similarity.match_threshold,
+            "learnable_theta": self.learnable_theta,
+            "learnable_match_threshold": self.learnable_match_threshold,
+        }
+
+
+@dataclass(slots=True)
+class TverskyFeatureSharingConfig:
+    """Configuration for :class:`TverskyFeatureSharing` two-stage head.
+
+    ABOUTME: Bundles stage-1 and stage-2 settings with shapes for easy wiring.
+    ABOUTME: Keeps all behaviors configurable while preserving safe defaults.
+    """
+
+    input_dim: int = 1
+    num_features: int = 1
+    output_dim: int = 1
+    # Stage 1 and 2 similarity options
+    s1: TverskySimilarityConfig = field(default_factory=lambda: TverskySimilarityConfig(input_transform="clamp01"))
+    s2: TverskySimilarityConfig = field(default_factory=lambda: TverskySimilarityConfig(input_transform="clamp01"))
+    # Layer options per stage
+    s1_bias: bool = False
+    s1_temperature: float | None = None
+    s1_prototype_init: Literal["xavier", "kaiming"] = "xavier"
+    s2_bias: bool = False
+    s2_temperature: float | None = None
+    s2_prototype_init: Literal["xavier", "kaiming"] = "xavier"
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TverskyFeatureSharingConfig":
+        s1 = data.get("s1")
+        s2 = data.get("s2")
+        if isinstance(s1, dict):
+            data = {**data, "s1": TverskySimilarityConfig.from_dict(s1)}
+        if isinstance(s2, dict):
+            data = {**data, "s2": TverskySimilarityConfig.from_dict(s2)}
+        return cls(**data)
 
 def tversky_similarity(  # noqa: C901, PLR0913, PLR0912, PLR0915
     input: torch.Tensor,  # noqa: A002
@@ -376,10 +505,12 @@ class TverskyProjection(nn.Module):
         learnable_beta: bool = False,
         alpha_beta_normalize: bool = False,
         temperature: float | None = None,
-        prototype_init: Literal["xavier", "kaiming"] = "xavier",
+        prototype_init: Literal["xavier", "kaiming"] | Callable[[torch.Tensor], None] = "xavier",
         intersection_reduction: Literal["sum", "mean", "product"] = "sum",
         difference_reduction: Literal["ignorematch", "subtractmatch"] = "subtractmatch",
         match_threshold: float = 0.0,
+        learnable_theta: bool = False,
+        learnable_match_threshold: bool = False,
     ) -> None:
         super().__init__()
 
@@ -394,9 +525,15 @@ class TverskyProjection(nn.Module):
         else:
             self.bias = None
 
-        # Register theta so module.to(device) moves it
+        # Theta: either learnable (unconstrained -> softplus) or fixed buffer
         default_dtype = torch.get_default_dtype()
-        self.register_buffer("theta", torch.tensor(float(theta), dtype=default_dtype))
+        self.learnable_theta = bool(learnable_theta)
+        if self.learnable_theta:
+            self._theta_unconstrained = nn.Parameter(
+                torch.tensor(_softplus_inverse(float(theta)), dtype=default_dtype)
+            )
+        else:
+            self.register_buffer("theta", torch.tensor(float(theta), dtype=default_dtype))
 
         # Alpha/Beta either as learnable parameters (unconstrained) or fixed buffers
         if self.learnable_alpha:
@@ -415,9 +552,12 @@ class TverskyProjection(nn.Module):
             self.register_buffer("beta", torch.tensor(float(beta), dtype=default_dtype))
 
         # Validate and store options
+        # Validate initializer: allow callable or known keys
         init_options = {"xavier", "kaiming"}
-        if prototype_init not in init_options:
-            raise ValueError("prototype_init must be one of 'xavier' or 'kaiming'")
+        if not (callable(prototype_init) or prototype_init in init_options):
+            raise ValueError(
+                "prototype_init must be 'xavier', 'kaiming', or a callable initializer"
+            )
         if intersection_reduction not in {"sum", "mean", "product"}:
             raise ValueError(
                 "intersection_reduction must be one of 'sum', 'mean', or 'product'"
@@ -435,17 +575,30 @@ class TverskyProjection(nn.Module):
         self.prototype_init = prototype_init
         self.intersection_reduction = intersection_reduction
         self.difference_reduction = difference_reduction
-        self.match_threshold = float(match_threshold)
+        # Match threshold: optionally learnable nonnegative scalar
+        self.learnable_match_threshold = bool(learnable_match_threshold)
+        if self.learnable_match_threshold:
+            self._match_threshold_unconstrained = nn.Parameter(
+                torch.tensor(_softplus_inverse(float(match_threshold)), dtype=default_dtype)
+            )
+        else:
+            self.match_threshold = float(match_threshold)
 
         # Initialize parameters similar to nn.Linear
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize weights and optional bias according to configuration."""
-        if self.prototype_init == "xavier":
-            nn.init.xavier_uniform_(self.weight)
+        if callable(self.prototype_init):
+            try:
+                self.prototype_init(self.weight)
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError("Custom prototype_init callable failed") from exc
         else:
-            nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+            if self.prototype_init == "xavier":
+                nn.init.xavier_uniform_(self.weight)
+            else:
+                nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
@@ -454,18 +607,20 @@ class TverskyProjection(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
         """Forward pass producing similarity scores per prototype."""
         alpha, beta = self._compute_alpha_beta()
+        theta = self._compute_theta()
+        match_threshold = self._compute_match_threshold()
         sims = pairwise_tversky(
             x,
             self.weight,
             alpha=alpha,
             beta=beta,
-            theta=self.theta,
+            theta=theta,
             input_transform=self.input_transform,
             nonnegative=self.nonnegative,
             smoothing_tau=self.smoothing_tau,
             intersection_reduction=self.intersection_reduction,
             difference_reduction=self.difference_reduction,
-            match_threshold=self.match_threshold,
+            match_threshold=match_threshold,
         )
         if self.bias is not None:
             sims = sims + self.bias
@@ -494,6 +649,25 @@ class TverskyProjection(nn.Module):
             alpha_pos = alpha_pos / denom
             beta_pos = beta_pos / denom
         return alpha_pos, beta_pos
+
+    def _compute_theta(self) -> torch.Tensor:
+        """Return current positive theta as a scalar tensor."""
+        if self.learnable_theta:
+            return F.softplus(self._theta_unconstrained)
+        # self.theta is a buffer if not learnable
+        assert isinstance(self.theta, torch.Tensor)
+        return self.theta
+
+    def _compute_match_threshold(self) -> torch.Tensor | float:
+        """Return nonnegative match threshold used for 'ignorematch' behavior."""
+        if self.learnable_match_threshold:
+            return F.softplus(self._match_threshold_unconstrained)
+        return self.match_threshold
+
+    @classmethod
+    def from_config(cls, cfg: TverskyProjectionConfig) -> "TverskyProjection":
+        """Construct a :class:`TverskyProjection` from a config object."""
+        return cls(**cfg.to_kwargs())
 
 
 def _softplus_inverse(y: float) -> float:
@@ -627,3 +801,40 @@ class TverskyFeatureSharing(nn.Module):
         """Enable/disable gradient updates for Stage 2 parameters."""
         for param in self.stage2.parameters():
             param.requires_grad_(not freeze)
+
+    @classmethod
+    def from_config(
+        cls, cfg: TverskyFeatureSharingConfig
+    ) -> "TverskyFeatureSharing":
+        """Construct from a :class:`TverskyFeatureSharingConfig`."""
+        return cls(
+            input_dim=cfg.input_dim,
+            num_features=cfg.num_features,
+            output_dim=cfg.output_dim,
+            # Stage 1
+            s1_alpha=cfg.s1.alpha,
+            s1_beta=cfg.s1.beta,
+            s1_theta=cfg.s1.theta,
+            s1_input_transform=cfg.s1.input_transform,
+            s1_nonnegative=cfg.s1.nonnegative,
+            s1_smoothing_tau=cfg.s1.smoothing_tau,
+            s1_intersection_reduction=cfg.s1.intersection_reduction,
+            s1_difference_reduction=cfg.s1.difference_reduction,
+            s1_match_threshold=cfg.s1.match_threshold,
+            s1_bias=cfg.s1_bias,
+            s1_temperature=cfg.s1_temperature,
+            s1_prototype_init=cfg.s1_prototype_init,
+            # Stage 2
+            s2_alpha=cfg.s2.alpha,
+            s2_beta=cfg.s2.beta,
+            s2_theta=cfg.s2.theta,
+            s2_input_transform=cfg.s2.input_transform,
+            s2_nonnegative=cfg.s2.nonnegative,
+            s2_smoothing_tau=cfg.s2.smoothing_tau,
+            s2_intersection_reduction=cfg.s2.intersection_reduction,
+            s2_difference_reduction=cfg.s2.difference_reduction,
+            s2_match_threshold=cfg.s2.match_threshold,
+            s2_bias=cfg.s2_bias,
+            s2_temperature=cfg.s2_temperature,
+            s2_prototype_init=cfg.s2_prototype_init,
+        )
