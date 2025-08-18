@@ -6,13 +6,13 @@ ABOUTME: Follows test-first, incremental steps; each item wires into repo withou
 Reference: [Tversky Neural Networks: Psychologically Plausible Deep Learning with Differentiable Tversky Similarity](https://arxiv.org/html/2506.11035v1)
 
 ## Repo integration targets (confirm before starting)
-- [ ] Confirm current branch is `feat/tnn-parity-tversky`
-- [ ] Activate env: `source /home/gdevos/structural_break/mlp-utils/.venv/bin/activate`
-- [ ] Code location: `src/mlp_utils/layers/tversky.py`
-- [ ] Public exports: `src/mlp_utils/layers/__init__.py`
-- [ ] Tests: `tests/test_tversky.py`
-- [ ] Docs: `README.md` (Layers section)
-- [ ] Examples: `experiments/tversky_xor.py`, `experiments/train_mnist_tversky.py`
+- [x] Confirm current branch is `feat/tnn-parity-tversky`
+- [x] Activate env: `source /home/gdevos/structural_break/mlp-utils/.venv/bin/activate`
+- [x] Code location: `src/mlp_utils/layers/tversky.py`
+- [x] Public exports: `src/mlp_utils/layers/__init__.py`
+- [x] Tests: `tests/test_tversky.py`
+- [x] Docs: `README.md` (Layers section)
+- [x] Examples: `experiments/tversky_xor.py`, `experiments/train_mnist_tversky.py`
 
 ## Global invariants (apply to every change)
 - [ ] Add or extend a test first
@@ -24,14 +24,14 @@ Reference: [Tversky Neural Networks: Psychologically Plausible Deep Learning wit
 ---
 
 ## Phase 0 — Baseline acceptance
-- [ ] Run all tests: `pytest -q`
-- [ ] Capture baseline coverage: `pytest --cov=mlp_utils --cov-report=term-missing`
-- [ ] Verify public API in README aligns with `src/mlp_utils/layers/__init__.py`
-- [ ] Commit: "tnn: record baseline tests and coverage"
+- [x] Run all tests: `pytest -q`
+- [x] Capture baseline coverage: `pytest --cov=mlp_utils --cov-report=term-missing`
+- [x] Verify public API in README aligns with `src/mlp_utils/layers/__init__.py`
+- [x] Commit: "tnn: record baseline tests and coverage"
 
 Acceptance:
-- [ ] Tests green
-- [ ] Baseline metrics recorded
+- [x] Tests green
+- [x] Baseline metrics recorded
 
 ---
 
@@ -51,7 +51,7 @@ Acceptance:
 - [ ] Property tests (Hypothesis): bounds [0,1], asymmetry when α≠β, monotonicity in shared mass, broadcast shapes
 - [ ] Stress tests: extreme magnitudes, sparse patterns, degenerate pairs (zeros, disjoint)
 - [ ] Precision/dtypes: float32/float64 parity; large D; product reduction underflow guard
-- [ ] TorchCompile/AMP/JIT smoke: `TverskyProjection`, `TverskyFeatureSharing`
+- [ ] TorchCompile/AMP smoke: `TverskyProjection`, `TverskyFeatureSharing`
 - [ ] Run tests: `pytest -q`
 - [ ] Commit: "tnn: robustness and property-based tests"
 
