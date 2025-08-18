@@ -540,8 +540,6 @@ def perform_ray_tuning(args: argparse.Namespace) -> None:  # noqa: PLR0915
         trainable,
         name="mnist_tversky_tune",
         config=search_space,
-        metric="val_acc",
-        mode="max",
         scheduler=scheduler,
         num_samples=int(args.tune_samples),
         resources_per_trial=resources,
