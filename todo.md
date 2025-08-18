@@ -48,12 +48,12 @@ Acceptance:
 ---
 
 ## Phase 2 — Testing expansion and numerical robustness
-- [ ] Property tests (Hypothesis): bounds [0,1], asymmetry when α≠β, monotonicity in shared mass, broadcast shapes
+- [x] Property tests (Hypothesis): bounds [0,1], asymmetry when α≠β, monotonicity in shared mass, broadcast shapes
 - [ ] Stress tests: extreme magnitudes, sparse patterns, degenerate pairs (zeros, disjoint)
-- [ ] Precision/dtypes: float32/float64 parity; large D; product reduction underflow guard
+- [x] Precision/dtypes: float32/float64 parity; large D; product reduction underflow guard
 - [x] TorchCompile/AMP smoke: `TverskyProjection`, `TverskyFeatureSharing`
-- [ ] Run tests: `pytest -q`
-- [ ] Commit: "tnn: robustness and property-based tests"
+- [x] Run tests: `pytest -q`
+- [x] Commit: "tnn: robustness and property-based tests"
 
 Acceptance:
 - [ ] New tests pass; coverage improves
