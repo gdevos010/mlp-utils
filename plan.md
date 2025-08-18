@@ -50,7 +50,7 @@ Acceptance: docs built/readable locally; links valid; no code behavior changes; 
 1) Property-based tests (Hypothesis) for monotonicity, bounds, asymmetry, broadcasting shapes.
 2) Stress tests: extreme magnitudes, sparse patterns, degenerate cases (all zeros, disjoint support).
 3) Precision tests across dtypes, larger dims, and product reduction underflow guards.
-4) TorchCompile/AMP/JIT smoke tests for `TverskyProjection` and `TverskyFeatureSharing`.
+4) TorchCompile/AMP smoke tests for `TverskyProjection` and `TverskyFeatureSharing`.
 
 Acceptance: new tests in `tests/test_tversky.py` (or split files) pass; coverage improves.
 
@@ -134,7 +134,7 @@ Each chunk yields a shippable state and wires into tests/examples. Chunks are or
 - Step 2.1: Add property-based tests for similarity bounds and asymmetry.
 - Step 2.2: Add stress cases: large/small scales, disjoint supports.
 - Step 2.3: Add dtype/shape broadcast matrix tests.
-- Step 2.4: Add torch.compile + AMP + JIT smoke tests.
+- Step 2.4: Add torch.compile + AMP smoke tests.
 - Step 2.5: `pytest -q`; ensure coverage increase.
 
 ### Chunk 3: Interpretability helpers (Phase 3)
@@ -187,7 +187,7 @@ For each chunk, the following micro-steps ensure right-sized work units with imm
 5) Run `pytest -q`; fix any regressions; keep commits small and isolated.
 
 Examples per chunk:
-- Chunk 2 → Micro: add one property test (bounds), run; then another (asymmetry), run; then broadcast test, run; then compile/JIT smoke, run.
+- Chunk 2 → Micro: add one property test (bounds), run; then another (asymmetry), run; then broadcast test, run; then compile smoke, run.
 - Chunk 3 → Micro: add `explain_similarity` with tests; only after green, add plotting helper used by XOR example (guard with `--plot`).
 - Chunk 4 → Micro: add seeding util + tests; wire in MNIST; then add diversity loss + tests; wire flag; keep each change separately shippable.
 - Chunk 5 → Micro: add tau scheduler + tests; expose α/β normalization flag in `TverskyProjection` (tests already present can be extended); wire flags to examples.
