@@ -14,8 +14,6 @@ All functions and modules use Google-style docstrings and document tensor
 shapes/sizes where applicable.
 """
 
-from __future__ import annotations
-
 import argparse
 import contextlib
 import copy
