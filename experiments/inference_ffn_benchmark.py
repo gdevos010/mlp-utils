@@ -11,6 +11,7 @@ from torch import nn
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.pathweightedfff import PathWeightedFFF
+from mlp_utils.layers import ResidualFiLM, FFNFiLM, FiLMGenerator
 
 
 def benchmark_model(
@@ -101,10 +102,49 @@ def run_benchmark(device: str, console: Console) -> None:
 
     ff_model = FeedForward(dim=dim, glu_variant="swiglu", mult=4).to(device)
 
+    # FiLM variants: ResidualFiLM around FFN, and FFNFiLM (gates hidden state)
+    # Use global zero-conditioning to measure overhead cleanly (identity behavior)
+    cond_dim = 32
+    film_gen_residual = FiLMGenerator(cond_dim=cond_dim, feature_dim=dim, token_wise=False)
+    film_gen_ffn = FiLMGenerator(cond_dim=cond_dim, feature_dim=dim * 4, token_wise=False)
+
+    class _ResidualFFNWithCond(nn.Module):
+        def __init__(self, dim: int) -> None:
+            super().__init__()
+            self.wrapper = ResidualFiLM(
+                FeedForward(dim=dim, glu_variant="swiglu", mult=4),
+                feature_dim=dim,
+                generator=film_gen_residual,
+            )
+            self.register_buffer("cond", torch.zeros(1, cond_dim))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            cond = self.cond.expand(x.shape[0], -1)
+            return self.wrapper(x, cond)
+
+    class _FFNFiLMWithCond(nn.Module):
+        def __init__(self, dim: int) -> None:
+            super().__init__()
+            self.wrapper = FFNFiLM(
+                dim=dim,
+                hidden_mult=4,
+                generator=film_gen_ffn,
+            )
+            self.register_buffer("cond", torch.zeros(1, cond_dim))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            cond = self.cond.expand(x.shape[0], -1)
+            return self.wrapper(x, cond)
+
+    residual_film_ffn_model = _ResidualFFNWithCond(dim).to(device)
+    ffn_film_model = _FFNFiLMWithCond(dim).to(device)
+
     fff_swiglu_model = torch.compile(fff_swiglu_model)
     fff_geglu_model = torch.compile(fff_geglu_model)
     pathweighted_fff_model = torch.compile(pathweighted_fff_model)
     ff_model = torch.compile(ff_model)
+    residual_film_ffn_model = torch.compile(residual_film_ffn_model)
+    ffn_film_model = torch.compile(ffn_film_model)
 
     # --- Benchmarking ---
     results = []
@@ -119,6 +159,32 @@ def run_benchmark(device: str, console: Console) -> None:
             "Mode": "Inference (eval)",
             "Avg. Time (ms)": f"{ff_time:.4f}",
             "Notes": "Standard baseline",
+        }
+    )
+
+    # 1b. FeedForward + ResidualFiLM (global zero cond)
+    rfilm_time = benchmark_model(residual_film_ffn_model, x, num_runs)
+    rfilm_size = get_model_size(residual_film_ffn_model)
+    results.append(
+        {
+            "Model": "FeedForward + ResidualFiLM",
+            "Size": rfilm_size,
+            "Mode": "Inference (eval)",
+            "Avg. Time (ms)": f"{rfilm_time:.4f}",
+            "Notes": "Pre-norm FiLM, zero-cond (identity)",
+        }
+    )
+
+    # 1c. FFNFiLM (gated hidden; global zero cond)
+    ffilm_time = benchmark_model(ffn_film_model, x, num_runs)
+    ffilm_size = get_model_size(ffn_film_model)
+    results.append(
+        {
+            "Model": "FFNFiLM (hidden gating)",
+            "Size": ffilm_size,
+            "Mode": "Inference (eval)",
+            "Avg. Time (ms)": f"{ffilm_time:.4f}",
+            "Notes": "Hidden FiLM, zero-cond (identity)",
         }
     )
 

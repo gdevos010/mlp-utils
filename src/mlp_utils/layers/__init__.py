@@ -19,3 +19,5 @@ from .ngpt import NGPT
 from .pathweightedfff import PathWeightedFFF
 from .residual import ResidualWrapper
 from .switch_ffn import SwitchFFN
+from .film import FiLM, FiLMGenerator, LowRankFiLM
+from .conditioning import ResidualFiLM, FFNFiLM, build_film_generators

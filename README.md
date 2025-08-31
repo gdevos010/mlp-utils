@@ -275,6 +275,97 @@ residual_mlp = ResidualWrapper(
 )
 ```
 
+#### FiLM (Conditioning)
+
+Feature-wise Linear Modulation (FiLM) conditions activations with per-feature scale and shift predicted from a conditioning signal.
+
+```python
+from mlp_utils.layers import FiLM, FiLMGenerator
+import torch
+
+# Shapes: x [B, T, D], cond [B, C] (global) or [B, T, C] (token-wise)
+x = torch.randn(2, 8, 256)
+cond = torch.zeros(2, 16)  # zero makes FiLM an identity at init
+
+gen = FiLMGenerator(cond_dim=16, feature_dim=256, token_wise=False)
+film = FiLM(feature_dim=256)
+
+gamma, beta = gen(cond)          # [B, D]
+y = film(x, gamma, beta)         # [B, T, D]
+```
+
+##### ResidualFiLM (pre-norm site)
+
+Wrap any module with a pre-norm residual FiLM hook. Zero conditioning is an exact no-op.
+
+```python
+from mlp_utils.layers import ResidualFiLM, FiLMGenerator
+import torch.nn as nn
+import torch
+
+dim = 256
+module = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Linear(dim, dim))
+gen = FiLMGenerator(cond_dim=32, feature_dim=dim, token_wise=False)
+wrapped = ResidualFiLM(module, feature_dim=dim, generator=gen)
+
+x = torch.randn(2, dim)
+cond = torch.zeros(2, 32)
+out = wrapped(x, cond)
+```
+
+##### FFNFiLM (gate the FFN hidden state)
+
+Apply FiLM to an FFN's intermediate activation for strong, stable control.
+
+```python
+from mlp_utils.layers import FFNFiLM, FiLMGenerator
+import torch
+
+dim = 256
+gen = FiLMGenerator(cond_dim=32, feature_dim=dim * 4, token_wise=False)
+ffn_film = FFNFiLM(dim=dim, hidden_mult=4, generator=gen)
+
+x = torch.randn(2, dim)
+cond = torch.randn(2, 32)
+out = ffn_film(x, cond)
+```
+
+##### LowRankFiLM and per-layer generators
+
+Use a small rank-K basis for FiLM to keep parameters tiny. Build shared or per-layer generators.
+
+```python
+from mlp_utils.layers import LowRankFiLM, FiLMGenerator, build_film_generators
+import torch
+
+rank = 4
+dim = 256
+lr_film = LowRankFiLM(feature_dim=dim, rank=rank)
+
+# coeffs shape: [..., 2 * rank]; here token-wise over a sequence
+coeffs = torch.zeros(2, 8, 2 * rank)
+y = lr_film(torch.randn(2, 8, dim), coeffs)
+
+# Build shared or per-layer FiLM generators
+shared_gen = build_film_generators(
+    shared=True,
+    num_layers=6,
+    factory=FiLMGenerator,
+    cond_dim=32,
+    feature_dim=dim,
+    token_wise=False,
+)
+
+per_layer_gens = build_film_generators(
+    shared=False,
+    num_layers=6,
+    factory=FiLMGenerator,
+    cond_dim=32,
+    feature_dim=dim,
+    token_wise=False,
+)
+```
+
 ### a not very accurate benchmark using toy dataset
 
 | Model | Compile | Params | Runtime (s) | Configuration | Final Loss | Status |
@@ -421,3 +512,13 @@ residual_mlp = ResidualWrapper(
       url={https://arxiv.org/abs/2311.10770}, 
 }
 ```
+
+```bibtex
+@misc{perez2017filmvisualreasoninggeneral,
+      title={FiLM: Visual Reasoning with a General Conditioning Layer}, 
+      author={Ethan Perez and Florian Strub and Harm de Vries and Vincent Dumoulin and Aaron Courville},
+      year={2017},
+      url={https://arxiv.org/abs/1709.07871}, 
+}
+```
+

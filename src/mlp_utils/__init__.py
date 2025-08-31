@@ -27,3 +27,4 @@ from .layers.gmlp import GMLP
 from .layers.mlp import MLP
 from .layers.ngpt import L2Norm
 from .layers.switch_ffn import SwitchFFN
+from .layers import FiLM, FiLMGenerator, LowRankFiLM, ResidualFiLM, FFNFiLM, build_film_generators
