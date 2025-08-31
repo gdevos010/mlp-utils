@@ -8,10 +8,10 @@ from rich.console import Console
 from rich.table import Table
 from torch import nn
 
+from mlp_utils.layers import FFNFiLM, FiLMGenerator, ResidualFiLM
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.pathweightedfff import PathWeightedFFF
-from mlp_utils.layers import ResidualFiLM, FFNFiLM, FiLMGenerator
 
 
 def benchmark_model(
@@ -105,8 +105,12 @@ def run_benchmark(device: str, console: Console) -> None:
     # FiLM variants: ResidualFiLM around FFN, and FFNFiLM (gates hidden state)
     # Use global zero-conditioning to measure overhead cleanly (identity behavior)
     cond_dim = 32
-    film_gen_residual = FiLMGenerator(cond_dim=cond_dim, feature_dim=dim, token_wise=False)
-    film_gen_ffn = FiLMGenerator(cond_dim=cond_dim, feature_dim=dim * 4, token_wise=False)
+    film_gen_residual = FiLMGenerator(
+        cond_dim=cond_dim, feature_dim=dim, token_wise=False
+    )
+    film_gen_ffn = FiLMGenerator(
+        cond_dim=cond_dim, feature_dim=dim * 4, token_wise=False
+    )
 
     class _ResidualFFNWithCond(nn.Module):
         def __init__(self, dim: int) -> None:

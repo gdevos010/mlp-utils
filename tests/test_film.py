@@ -1,8 +1,6 @@
 import torch
-import pytest
 
 from mlp_utils.layers.film import FiLM, FiLMGenerator, LowRankFiLM
-
 
 BATCH = 3
 TOKENS = 5
@@ -75,5 +73,3 @@ def test_lowrank_film_shapes_and_identity() -> None:
     y = lr_film(x, coeffs)
     assert y.shape == x.shape
     assert torch.allclose(y, x, atol=1e-6)
-
-

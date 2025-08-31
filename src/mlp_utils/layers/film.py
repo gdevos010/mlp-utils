@@ -2,9 +2,8 @@
 ABOUTME: Provides FiLM, FiLMGenerator, and LowRankFiLM for conditioning models.
 """
 
-from typing import Optional, Tuple
-
 import torch
+
 from torch import nn
 
 
@@ -39,7 +38,9 @@ class FiLM(nn.Module):
             out = out.unsqueeze(-2)
         return out
 
-    def forward(self, x: torch.Tensor, gamma: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, gamma: torch.Tensor, beta: torch.Tensor
+    ) -> torch.Tensor:
         """Apply FiLM modulation.
 
         Args:
@@ -81,7 +82,7 @@ class FiLMGenerator(nn.Module):
         cond_dim: int,
         feature_dim: int,
         token_wise: bool = False,
-        hidden: Optional[int] = None,
+        hidden: int | None = None,
         activation: type[nn.Module] = nn.SiLU,
         dropout: float = 0.0,
     ) -> None:
@@ -98,7 +99,7 @@ class FiLMGenerator(nn.Module):
             layers.append(nn.Linear(cond_dim, 2 * feature_dim, bias=False))
         self.net = nn.Sequential(*layers)
 
-    def forward(self, cond: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, cond: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Generate FiLM parameters from the conditioning signal.
 
         Supports cond shapes [B, C] or [B, T, C]. Returns (gamma, beta) with
@@ -181,5 +182,3 @@ def film_l2_regularization(
         Scalar tensor equal to gamma_weight * ||gamma||^2_mean + beta_weight * ||beta||^2_mean.
     """
     return gamma_weight * gamma.pow(2).mean() + beta_weight * beta.pow(2).mean()
-
-

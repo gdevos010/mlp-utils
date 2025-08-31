@@ -2,9 +2,11 @@
 ABOUTME: Provides ResidualFiLM and FFNFiLM wrappers and generator factories.
 """
 
-from typing import Callable, List, Sequence
+from collections.abc import Callable
+from typing import Any
 
 import torch
+
 from torch import nn
 
 from .film import FiLM, FiLMGenerator
@@ -22,7 +24,8 @@ class ResidualFiLM(nn.Module):
         module: nn.Module,
         *,
         feature_dim: int,
-        generator: FiLMGenerator | Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]],
+        generator: FiLMGenerator
+        | Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]],
         norm_layer: type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super().__init__()
@@ -32,6 +35,15 @@ class ResidualFiLM(nn.Module):
         self.generator = generator
 
     def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        """Apply FiLM-conditioned residual update.
+
+        Args:
+            x: Input tensor of shape (..., feature_dim).
+            cond: Conditioning tensor used to compute FiLM parameters.
+
+        Returns:
+            Tensor with residual FiLM modulation applied.
+        """
         h = self.norm(x)
         # Baseline path without FiLM for identity at zero-conditioning
         baseline = self.module(h)
@@ -55,7 +67,8 @@ class FFNFiLM(nn.Module):
         hidden_mult: int = 4,
         dropout: float = 0.0,
         activation: type[nn.Module] = nn.GELU,
-        generator: FiLMGenerator | Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]],
+        generator: FiLMGenerator
+        | Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]],
     ) -> None:
         super().__init__()
         hidden = dim * hidden_mult
@@ -67,6 +80,15 @@ class FFNFiLM(nn.Module):
         self.generator = generator
 
     def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        """Apply FiLM to FFN hidden activations and project back.
+
+        Args:
+            x: Input tensor of shape (..., dim).
+            cond: Conditioning tensor used to compute FiLM parameters.
+
+        Returns:
+            Tensor after FiLM-modulated FFN.
+        """
         h = self.in_proj(x)
         gamma, beta = self.generator(cond)
         h = self.film(h, gamma, beta)
@@ -80,8 +102,8 @@ def build_film_generators(
     shared: bool,
     num_layers: int,
     factory: Callable[..., FiLMGenerator],
-    **kwargs,
-) -> FiLMGenerator | List[FiLMGenerator]:
+    **kwargs: Any,  # noqa: ANN401
+) -> FiLMGenerator | list[FiLMGenerator]:
     """Create one shared FiLMGenerator or a list (per-layer).
 
     Args:
@@ -93,5 +115,3 @@ def build_film_generators(
     if shared:
         return factory(**kwargs)
     return [factory(**kwargs) for _ in range(num_layers)]
-
-

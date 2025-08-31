@@ -1,5 +1,7 @@
+from .conditioning import FFNFiLM, ResidualFiLM, build_film_generators
 from .fastfeedforward import FastFeedForward
 from .feedforward import FeedForward
+from .film import FiLM, FiLMGenerator, LowRankFiLM
 from .gating import GatingMechanism
 from .glu import (
     GLU,
@@ -19,5 +21,3 @@ from .ngpt import NGPT
 from .pathweightedfff import PathWeightedFFF
 from .residual import ResidualWrapper
 from .switch_ffn import SwitchFFN
-from .film import FiLM, FiLMGenerator, LowRankFiLM
-from .conditioning import ResidualFiLM, FFNFiLM, build_film_generators

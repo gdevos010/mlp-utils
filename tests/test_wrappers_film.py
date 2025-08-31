@@ -1,6 +1,6 @@
 import torch
 
-from mlp_utils.layers import ResidualFiLM, FFNFiLM, FiLMGenerator
+from mlp_utils.layers import FFNFiLM, FiLMGenerator, ResidualFiLM
 
 
 def test_residual_film_identity() -> None:
@@ -24,5 +24,3 @@ def test_ffn_film_shapes() -> None:
     cond = torch.randn(3, 4)
     y = wrapper(x, cond)
     assert y.shape == x.shape
-
-

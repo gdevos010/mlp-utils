@@ -37,6 +37,13 @@ from torch.utils.data import DataLoader, random_split
 
 # Backbones and utilities (kept consistent with verify_training.py)
 from mlp_utils.activations import BSiLU, Gelu2, ReluNelu, ReluSquared
+from mlp_utils.layers import (
+    FFNFiLM,
+    FiLMGenerator,
+    LowRankFiLM,
+    ResidualFiLM,
+    build_film_generators,
+)
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.gmlp import GMLP
@@ -44,13 +51,6 @@ from mlp_utils.layers.mlp import MLP
 from mlp_utils.layers.ngpt import NGPT
 from mlp_utils.layers.pathweightedfff import PathWeightedFFF
 from mlp_utils.layers.switch_ffn import SwitchFFN
-from mlp_utils.layers import (
-    ResidualFiLM,
-    FFNFiLM,
-    FiLMGenerator,
-    LowRankFiLM,
-    build_film_generators,
-)
 
 
 @dataclass
@@ -229,10 +229,13 @@ def get_model(config: dict) -> nn.Module:
             activation=config.get("activation", nn.GELU),
         )
     if model_name == "residual_film_ffn":
+
         class _ResidualFFNWithSelfCond(nn.Module):
             def __init__(self, dim: int) -> None:
                 super().__init__()
-                self.generator = FiLMGenerator(cond_dim=dim, feature_dim=dim, token_wise=False)
+                self.generator = FiLMGenerator(
+                    cond_dim=dim, feature_dim=dim, token_wise=False
+                )
                 self.wrapper = ResidualFiLM(
                     FeedForward(dim=dim, mult=4, glu_variant="swiglu"),
                     feature_dim=dim,
@@ -245,6 +248,7 @@ def get_model(config: dict) -> nn.Module:
 
         return _ResidualFFNWithSelfCond(dim)
     if model_name == "ffn_film":
+
         class _FFNFiLMWithSelfCond(nn.Module):
             def __init__(self, dim: int) -> None:
                 super().__init__()
@@ -264,6 +268,7 @@ def get_model(config: dict) -> nn.Module:
 
         return _FFNFiLMWithSelfCond(dim)
     if model_name == "ffn_lowrank_film":
+
         class _FFNLowRankFiLMWithSelfCond(nn.Module):
             def __init__(self, dim: int, rank: int = 4) -> None:
                 super().__init__()
@@ -285,6 +290,7 @@ def get_model(config: dict) -> nn.Module:
 
         return _FFNLowRankFiLMWithSelfCond(dim)
     if model_name == "residual_film_stack_shared":
+
         class _ResidualFiLMStackShared(nn.Module):
             def __init__(self, dim: int, depth: int = 3) -> None:
                 super().__init__()
@@ -308,6 +314,7 @@ def get_model(config: dict) -> nn.Module:
 
         return _ResidualFiLMStackShared(dim, depth=config.get("film_depth", 3))
     if model_name == "residual_film_stack_perlayer":
+
         class _ResidualFiLMStackPerLayer(nn.Module):
             def __init__(self, dim: int, depth: int = 3) -> None:
                 super().__init__()
