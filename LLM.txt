@@ -1,0 +1,138 @@
+### /workspace/condor/other/mlp-utils/experiments/
+benchmark_glu.py - Benchmarks the performance and memory usage of different GLU and Masked GLU variants across various configurations. Provides timing, memory profiling, and output verification results in a formatted table for comparative analysis.
+Symbols:
+  - Functions: main (L350)
+  - Classes: GLUBenchmark (L31)
+  - Methods: GLUBenchmark.__init__ (L34), GLUBenchmark.benchmark_variant (L152), GLUBenchmark.compare_glu_vs_mglu (L276), GLUBenchmark.create_test_data (L67), GLUBenchmark.measure_backward_time (L89), GLUBenchmark.measure_forward_time (L71), GLUBenchmark.measure_memory_usage (L113), GLUBenchmark.print_results_table (L211), GLUBenchmark.run_benchmarks (L182)
+
+inference_ffn_benchmark.py - Measures the inference speed and memory efficiency of FastFeedForward, FeedForward, and PathWeightedFFF architectures on GPU and CPU devices. Reports benchmark results in a rich table with timing comparisons across different configurations.
+Symbols:
+  - Functions: benchmark_model (L16), get_model_size (L48), main (L209), run_benchmark (L56)
+
+train_mnist.py - Trains multiple MLP-family models from mlp_utils on MNIST classification and provides detailed loss curves and performance summaries. Supports various backbone architectures including MLP, FeedForward, FastFeedForward, PathWeightedFFF, gMLP, NGPT, and SwitchFFN.
+Symbols:
+  - Functions: build_configurations (L604), create_summary_table (L542), estimate_dim_for_budget (L340), evaluate (L497), format_param_count (L280), get_model (L185), get_model_size (L263), get_num_params (L296), main (L804), parse_param_budgets (L308), patchify_images (L94), run_configuration (L677), train_one_epoch (L440)
+  - Classes: MNISTClassifier (L133), TrainConfig (L48)
+  - Methods: MNISTClassifier.__init__ (L149), MNISTClassifier.forward (L158)
+
+verify_training.py - Verifies training behavior and loss curves of different MLP architectures on synthetic regression data with various activation functions and normalization strategies. Outputs results to a formatted table for analyzing convergence and model performance.
+Symbols:
+  - Functions: create_summary_table (L153), get_model (L31), get_model_size (L89), get_synthetic_data (L23), main (L190), train (L99)
+
+### /workspace/condor/other/mlp-utils/src/mlp_utils/
+__init__.py - Re-exports all public APIs including activation functions, layers, and normalization utilities for convenient top-level access. Provides a unified interface to the mlp_utils library components.
+
+activations.py - Implements custom activation functions including ReluSquared, Gelu2, BSiLU, NeLU, and straight-through estimators (Sugar, StraightThroughEstimator) for advanced neural network designs. Provides specialized activations for sparse models and gradient approximation during backpropagation.
+Symbols:
+  - Classes: BSiLU (L49), Gelu2 (L34), NeLU (L73), ReluNelu (L159), ReluSquared (L9), StraightThroughEstimator (L130), Sugar (L95), SugarReLU (L174)
+  - Methods: BSiLU.__init__ (L56), BSiLU.forward (L60), Gelu2.forward (L37), NeLU.__init__ (L79), NeLU.forward (L83), ReluNelu.__init__ (L165), ReluSquared.__init__ (L15), ReluSquared.forward (L19), StraightThroughEstimator.__init__ (L136), StraightThroughEstimator.forward (L141), Sugar.__init__ (L102), Sugar.forward (L107), SugarReLU.__init__ (L177)
+
+### /workspace/condor/other/mlp-utils/src/mlp_utils/layers/
+__init__.py - Re-exports all layer implementations including feed-forward variants, gating mechanisms, GLU units, and specialized architectures for convenient module-level access. Centralizes the public API for neural network component selection.
+
+fastfeedforward.py - Implements the Fast Feedforward Network architecture from Belcak & Wattenhofer with a binary routing tree for sparse expert selection. Uses hard routing at inference and optional soft routing during training to achieve logarithmic complexity scaling with the number of experts.
+Symbols:
+  - Classes: FastFeedForward (L13)
+  - Methods: FastFeedForward.__init__ (L36), FastFeedForward._check_swiglu_compatibility (L102), FastFeedForward._fast_swiglu_hard_routing (L279), FastFeedForward._generic_hard_routing (L235), FastFeedForward._get_expert_indices (L192), FastFeedForward._hard_routing_forward (L226), FastFeedForward._soft_routing_forward (L134), FastFeedForward.forward (L121)
+
+feedforward.py - Implements a flexible feed-forward block supporting multiple GLU variants and conventional MLP paths with optional normalization and dropout. Provides a unified interface for building feed-forward networks with customizable activation functions and gating mechanisms.
+Symbols:
+  - Classes: FeedForward (L24)
+  - Methods: FeedForward.__init__ (L45), FeedForward.forward (L117)
+
+gating.py - Implements a standardized gating mechanism with bottleneck projections, normalization, and configurable activation functions for modular reuse. Supports dynamic feature selection through learned gates with optional sigmoid output and dropout regularization.
+Symbols:
+  - Classes: GatingMechanism (L10)
+  - Methods: GatingMechanism.__init__ (L17), GatingMechanism.forward (L92)
+
+glu.py - Implements Gated Linear Units (GLU) with multiple variants (GLU, SwiGLU, GeGLU, ReGLU) and their memory-efficient Masked counterparts (MGLU, SwiMGLU, GeMGLU, ReMGLU). Provides the core gating mechanism using multiplicative interactions between separate value and gate projections.
+Symbols:
+  - Classes: Bilinear (L62), BilinearMGLU (L207), GLU (L50), GeGLU (L100), GeMGLU (L247), MGLU (L195), ReGLU (L76), ReMGLU (L223), SwiGLU (L88), SwiMGLU (L235), _GLUBase (L8), _MGLUBase (L112)
+  - Methods: Bilinear.__init__ (L72), BilinearMGLU.__init__ (L219), GLU.__init__ (L58), GeGLU.__init__ (L108), GeMGLU.__init__ (L255), MGLU.__init__ (L203), ReGLU.__init__ (L84), ReMGLU.__init__ (L231), SwiGLU.__init__ (L96), SwiMGLU.__init__ (L243), _GLUBase.__init__ (L26), _GLUBase.forward (L37), _MGLUBase.__init__ (L144), _MGLUBase.forward (L158)
+
+gmlp.py - Implements the gMLP architecture from "Pay Attention to MLPs" with spatial gating, drop-path regularization, and token-level processing. Provides a sequence-aware alternative to transformer architectures by applying learned linear projections across the sequence dimension.
+Symbols:
+  - Classes: DropPath (L9), GMLP (L160), GMLPBlock (L103), SpatialGatingUnit (L41)
+  - Methods: DropPath.__init__ (L19), DropPath.forward (L24), GMLP.__init__ (L180), GMLP.forward (L215), GMLPBlock.__init__ (L121), GMLPBlock.forward (L143), SpatialGatingUnit.__init__ (L60), SpatialGatingUnit.forward (L78)
+
+init_weights.py - Provides standardized weight initialization utilities supporting multiple initialization strategies (default, gating, embedding, expert) tailored to different layer roles. Ensures consistent weight initialization across the codebase with support for custom scale factors and nonlinearity types.
+Symbols:
+  - Functions: apply_initialization (L100), create_initializer (L124), initialize_weights (L16)
+
+mlp.py - Implements a standardized MLP module with configurable hidden dimensions, activation functions, normalization, and optional residual connections. Supports flexible architecture design with pre/post/both/none normalization modes and automatic output dimension handling.
+Symbols:
+  - Classes: MLP (L13)
+  - Methods: MLP.__init__ (L33), MLP.forward (L113)
+
+ngpt.py - Implements the nGPT feed-forward block from "Normalized Transformer with Representation Learning on the Hypersphere" with learnable L2 normalization and optional alpha interpolation parameters. Provides utilities for L2-norm computation with soft normalization and optional wrapping of custom feed-forward networks.
+Symbols:
+  - Functions: default (L25), exists (L20), l2norm (L30)
+  - Classes: L2Norm (L53), NGPT (L122), NormLinear (L73), Scale (L102)
+  - Methods: L2Norm.__init__ (L56), L2Norm.forward (L61), NGPT.__init__ (L131), NGPT.forward (L172), NGPT.needs_normalized_target (L168), NormLinear.__init__ (L76), NormLinear.forward (L90), Scale.__init__ (L108), Scale.forward (L113)
+
+pathweightedfff.py - Implements a hierarchical, path-dependent neural network using a binary tree structure where outputs combine transformations from all nodes along the traversed path. Differs from sparse MoE by computing weighted combinations of transformations at each level, enabling fine-grained hierarchical feature learning.
+Symbols:
+  - Functions: sign_ste (L30)
+  - Classes: PathWeightedFFF (L35), SignSTE (L16)
+  - Methods: PathWeightedFFF.__init__ (L76), PathWeightedFFF._initialise_weights (L97), PathWeightedFFF.forward (L116), SignSTE.backward (L25), SignSTE.forward (L20)
+
+residual.py - Implements a simple residual wrapper that adds skip connections to any module, enabling residual learning patterns throughout the network. Provides a reusable component for creating residual versions of existing neural network modules.
+Symbols:
+  - Classes: ResidualWrapper (L8)
+  - Methods: ResidualWrapper.__init__ (L11), ResidualWrapper.forward (L20)
+
+switch_ffn.py - Implements the Switch Transformer Feed-Forward layer with sparse mixture-of-experts routing and load-balancing loss for efficient scaling. Routes each input token to a single expert while maintaining balanced expert utilization through auxiliary loss computation.
+Symbols:
+  - Classes: SwitchFFN (L17)
+  - Methods: SwitchFFN.__init__ (L45), SwitchFFN.forward (L68)
+
+### /workspace/condor/other/mlp-utils/tests/
+test_activations.py - Tests all custom activation functions including ReluSquared, Gelu2, BSiLU, NeLU, Sugar, and straight-through estimators for correct numerical computation and gradient flow. Verifies output shapes, gradients, and special cases across various input configurations.
+Symbols:
+  - Functions: test_bsilu (L39), test_gelu2 (L31), test_nelu (L48), test_relu_nelu (L75), test_relu_squared_signed (L23), test_relu_squared_unsigned (L15), test_straight_through_estimator (L57), test_sugar_relu (L93)
+
+test_compile.py - Tests PyTorch compilation compatibility of all mlp_utils layers using torch.compile for performance optimization. Verifies that complex modules can be compiled without errors and produce correct outputs in both compiled and non-compiled modes.
+Symbols:
+  - Classes: SimpleModule (L41), TestCompiledModules (L53)
+  - Methods: SimpleModule.__init__ (L42), SimpleModule.forward (L46), TestCompiledModules.test_activations_compile (L74), TestCompiledModules.test_fastfeedforward_compile (L140), TestCompiledModules.test_feedforward_compile (L130), TestCompiledModules.test_gating_mechanism_compile (L162), TestCompiledModules.test_glu_variants_compile (L105), TestCompiledModules.test_gmlp_compile (L172), TestCompiledModules.test_mglu_variants_compile (L119), TestCompiledModules.test_mlp_compile (L182), TestCompiledModules.test_ngpt_compile (L192), TestCompiledModules.test_residual_wrapper_compile (L204), TestCompiledModules.test_straight_through_estimator_compile (L83), TestCompiledModules.test_sugar_compile (L92)
+
+test_fastfeedforward.py - Tests the FastFeedForward layer implementation including routing tree construction, expert selection, and output computation. Verifies shape preservation, gradient flow, and correct behavior under different depth configurations and routing modes.
+Symbols:
+  - Functions: test_fastfeedforward_eval_mode (L101), test_fastfeedforward_forward_pass (L50), test_fastfeedforward_forward_pass_expert_dim (L22), test_fastfeedforward_forward_pass_pre_norm (L75), test_fastfeedforward_generic_hard_routing_path (L123), test_fastfeedforward_initialization (L6), test_fastfeedforward_soft_routing_grad (L148)
+
+test_feedforward.py - Tests the FeedForward module across all GLU variants and conventional MLP paths with various configurations and activation functions. Verifies shape preservation, parameter counts, and correct forward pass behavior for each variant combination.
+Symbols:
+  - Functions: input_tensor (L26), test_dropout_presence_and_value (L59), test_feedforward_custom_activation (L76), test_feedforward_custom_norm_layer (L82), test_feedforward_forward_pass (L38), test_feedforward_initialization (L31), test_feedforward_invalid_glu_variant (L53), test_feedforward_pre_norm (L45)
+
+test_feedforward_api.py - Tests the FeedForward module API consistency and backward compatibility across different configuration options and update patterns. Ensures that the public interface remains stable and that configuration changes are properly handled.
+Symbols:
+  - Functions: test_feedforward_forward_signature_and_behavior (L27)
+
+test_gating.py - Tests the GatingMechanism module with different bottleneck configurations, normalization layers, and activation functions. Verifies correct shape handling, gradient computation, and optional sigmoid output behavior.
+Symbols:
+  - Functions: input_tensor (L10), test_gating_mechanism_assertions (L58), test_gating_mechanism_bottleneck_dim (L22), test_gating_mechanism_bottleneck_factor (L14), test_gating_mechanism_custom_activation (L67), test_gating_mechanism_dropout (L73), test_gating_mechanism_no_norm (L42), test_gating_mechanism_no_sigmoid (L50), test_gating_mechanism_output_dim (L28), test_gating_mechanism_pre_norm (L34)
+
+test_glu_variants.py - Tests all GLU and Masked GLU variants (GLU, SwiGLU, GeGLU, ReGLU, Bilinear and their masked counterparts) for correct initialization and forward pass computation. Verifies shape preservation and that gating mechanisms produce expected outputs.
+Symbols:
+  - Functions: test_glu_variants (L30), test_mglu_variants (L60)
+
+test_gmlp.py - Tests the GMLP architecture including drop-path regularization, spatial gating, and sequence-aware processing. Verifies correct handling of variable sequence lengths and proper application of normalization and gating modules.
+Symbols:
+  - Functions: sample_input (L8), test_gmlp_block_output_shape (L23), test_gmlp_forward_pass (L46), test_gmlp_output_shape (L34), test_spatial_gating_unit_output_shape (L13)
+
+test_mlp.py - Tests the MLP module with various configurations including different normalization modes, activation functions, and optional residual connections. Verifies shape preservation, parameter counts, and correct gradient flow through different architectural variations.
+Symbols:
+  - Functions: test_dropout_layer_presence (L71), test_mlp_custom_act_fn_class (L109), test_mlp_custom_act_fn_instance (L118), test_mlp_custom_norm_layer (L96), test_mlp_forward_pass (L13), test_mlp_initialization (L7), test_mlp_invalid_dropout (L63), test_mlp_invalid_hidden_factor (L55), test_mlp_no_norm_layer (L86), test_mlp_output_dim_defaults_to_input_dim (L21), test_mlp_post_norm (L127), test_mlp_pre_norm (L46), test_mlp_residual_connection (L30), test_mlp_residual_connection_no_wrapper_on_dim_mismatch (L38)
+
+test_ngpt.py - Tests the NGPT layer and L2 normalization utilities including both scalar and vector alpha parameters and soft normalization modes. Verifies correct L2 normalization computation, optional wrapping of feed-forward networks, and proper gradient flow.
+Symbols:
+  - Functions: test_ngpt_default_forward_pass (L22), test_ngpt_default_gradients (L50), test_ngpt_default_initialization (L10), test_ngpt_with_fastfeedforward_forward_pass (L92), test_ngpt_with_fastfeedforward_gradients (L134), test_ngpt_with_fastfeedforward_initialization (L79)
+
+test_pathweightedfff.py - Tests the PathWeightedFFF architecture with different tree depths and activation functions for correct hierarchical path computation. Verifies shape preservation, weight application, and proper gradient flow through the path-weighted tree structure.
+Symbols:
+  - Functions: test_backward_pass (L61), test_deterministic_path_selection (L77), test_device_compatibility (L146), test_forward_pass_shape_3d (L25), test_initialization (L11), test_input_dimension_error (L40), test_parameters_are_registered (L51)
+
+test_switch_ffn.py - Tests the SwitchFFN layer including routing, expert selection, and auxiliary load-balancing loss computation. Verifies correct output shapes, auxiliary loss generation, and proper expert utilization across different numbers of experts.
+Symbols:
+  - Functions: input_tensor (L24), switch_config (L8), switch_ffn (L18), test_router_receives_gradients (L57), test_switch_ffn_forward_pass (L47), test_switch_ffn_forward_single_expert (L91), test_switch_ffn_initialization (L31), test_switch_ffn_invalid_experts (L41), test_switch_ffn_varying_experts (L102), test_token_dropping (L69)
+
