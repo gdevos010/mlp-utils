@@ -3,15 +3,6 @@
 This script trains multiple backbone variants from `mlp_utils` on the MNIST
 classification task and summarizes results in a rich table. It mirrors the
 grouping of configurations used in `verify_training.py`.
-
-Key characteristics:
-- Minimal CLI
-- Graceful stopping with partial results reported
-- No model checkpointing
-- Rich table summary at the end
-
-All functions and modules use Google-style docstrings and document tensor
-shapes/sizes where applicable.
 """
 
 from __future__ import annotations
