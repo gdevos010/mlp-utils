@@ -3,15 +3,6 @@
 This script trains multiple backbone variants from `mlp_utils` on the MNIST
 classification task and summarizes results in a rich table. It mirrors the
 grouping of configurations used in `verify_training.py`.
-
-Key characteristics:
-- Minimal CLI
-- Graceful stopping with partial results reported
-- No model checkpointing
-- Rich table summary at the end
-
-All functions and modules use Google-style docstrings and document tensor
-shapes/sizes where applicable.
 """
 
 from __future__ import annotations
@@ -37,6 +28,13 @@ from torch.utils.data import DataLoader, random_split
 
 # Backbones and utilities (kept consistent with verify_training.py)
 from mlp_utils.activations import BSiLU, Gelu2, ReluNelu, ReluSquared
+from mlp_utils.layers import (
+    FFNFiLM,
+    FiLMGenerator,
+    LowRankFiLM,
+    ResidualFiLM,
+    build_film_generators,
+)
 from mlp_utils.layers.fastfeedforward import FastFeedForward
 from mlp_utils.layers.feedforward import FeedForward
 from mlp_utils.layers.gmlp import GMLP
@@ -221,6 +219,123 @@ def get_model(config: dict) -> nn.Module:
             glu_variant=config["glu_variant"],
             activation=config.get("activation", nn.GELU),
         )
+    if model_name == "residual_film_ffn":
+
+        class _ResidualFFNWithSelfCond(nn.Module):
+            def __init__(self, dim: int) -> None:
+                super().__init__()
+                self.generator = FiLMGenerator(
+                    cond_dim=dim, feature_dim=dim, token_wise=False
+                )
+                self.wrapper = ResidualFiLM(
+                    FeedForward(dim=dim, mult=4, glu_variant="swiglu"),
+                    feature_dim=dim,
+                    generator=self.generator,
+                )
+
+            def forward(self, x: Tensor) -> Tensor:
+                cond = x.mean(dim=1)
+                return self.wrapper(x, cond)
+
+        return _ResidualFFNWithSelfCond(dim)
+    if model_name == "ffn_film":
+
+        class _FFNFiLMWithSelfCond(nn.Module):
+            def __init__(self, dim: int) -> None:
+                super().__init__()
+                hidden_mult = 4
+                self.generator = FiLMGenerator(
+                    cond_dim=dim, feature_dim=dim * hidden_mult, token_wise=False
+                )
+                self.wrapper = FFNFiLM(
+                    dim=dim,
+                    hidden_mult=hidden_mult,
+                    generator=self.generator,
+                )
+
+            def forward(self, x: Tensor) -> Tensor:
+                cond = x.mean(dim=1)
+                return self.wrapper(x, cond)
+
+        return _FFNFiLMWithSelfCond(dim)
+    if model_name == "ffn_lowrank_film":
+
+        class _FFNLowRankFiLMWithSelfCond(nn.Module):
+            def __init__(self, dim: int, rank: int = 4) -> None:
+                super().__init__()
+                hidden_mult = 4
+                hidden = dim * hidden_mult
+                self.in_proj = nn.Linear(dim, hidden)
+                self.act = nn.GELU()
+                self.out_proj = nn.Linear(hidden, dim)
+                self.lr_film = LowRankFiLM(feature_dim=hidden, rank=rank)
+                self.coeff_net = nn.Linear(dim, 2 * rank, bias=False)
+
+            def forward(self, x: Tensor) -> Tensor:
+                h = self.in_proj(x)
+                cond = x.mean(dim=1)
+                coeffs = self.coeff_net(cond)
+                h = self.lr_film(h, coeffs)
+                h = self.act(h)
+                return self.out_proj(h)
+
+        return _FFNLowRankFiLMWithSelfCond(dim)
+    if model_name == "residual_film_stack_shared":
+
+        class _ResidualFiLMStackShared(nn.Module):
+            def __init__(self, dim: int, depth: int = 3) -> None:
+                super().__init__()
+                gen = FiLMGenerator(cond_dim=dim, feature_dim=dim, token_wise=False)
+                self.layers = nn.ModuleList(
+                    [
+                        ResidualFiLM(
+                            FeedForward(dim=dim, mult=4, glu_variant="swiglu"),
+                            feature_dim=dim,
+                            generator=gen,
+                        )
+                        for _ in range(depth)
+                    ]
+                )
+
+            def forward(self, x: Tensor) -> Tensor:
+                cond = x.mean(dim=1)
+                for layer in self.layers:
+                    x = layer(x, cond)
+                return x
+
+        return _ResidualFiLMStackShared(dim, depth=config.get("film_depth", 3))
+    if model_name == "residual_film_stack_perlayer":
+
+        class _ResidualFiLMStackPerLayer(nn.Module):
+            def __init__(self, dim: int, depth: int = 3) -> None:
+                super().__init__()
+                gens = build_film_generators(
+                    shared=False,
+                    num_layers=depth,
+                    factory=FiLMGenerator,
+                    cond_dim=dim,
+                    feature_dim=dim,
+                    token_wise=False,
+                )
+                assert isinstance(gens, list)
+                self.layers = nn.ModuleList(
+                    [
+                        ResidualFiLM(
+                            FeedForward(dim=dim, mult=4, glu_variant="swiglu"),
+                            feature_dim=dim,
+                            generator=gens[i],
+                        )
+                        for i in range(depth)
+                    ]
+                )
+
+            def forward(self, x: Tensor) -> Tensor:
+                cond = x.mean(dim=1)
+                for layer in self.layers:
+                    x = layer(x, cond)
+                return x
+
+        return _ResidualFiLMStackPerLayer(dim, depth=config.get("film_depth", 3))
 
     if model_name == "fastfeedforward":
         return FastFeedForward(
@@ -642,6 +757,12 @@ def build_configurations(base_config: dict) -> list[dict]:
         {"model_name": "feedforward", "glu_variant": "geglu"},
         {"model_name": "feedforward", "glu_variant": "reglu"},
         {"model_name": "feedforward", "glu_variant": "bilinear"},
+        # FiLM variants (self-conditioned)
+        {"model_name": "residual_film_ffn"},
+        {"model_name": "ffn_film"},
+        {"model_name": "ffn_lowrank_film"},
+        {"model_name": "residual_film_stack_shared", "film_depth": 3},
+        {"model_name": "residual_film_stack_perlayer", "film_depth": 3},
         # FeedForward variants (Masked GLU)
         {"model_name": "feedforward", "glu_variant": "mglu"},
         {"model_name": "feedforward", "glu_variant": "mswiglu"},
@@ -824,7 +945,7 @@ def main() -> None:
         default="all",
         help="Which group of models to run",
     )
-    parser.add_argument("--epochs", type=int, default=2)
+    parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--patch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=2)
@@ -1013,9 +1134,9 @@ def main() -> None:
                     )
                     results.append(result)
         else:
-            for variant in configurations:
+            for i, variant in enumerate(configurations):
                 logger.info(
-                    f"--- Training {variant['model_name']} with config variants: "
+                    f"--- Training ({i}/{len(configurations)}) {variant['model_name']} with config variants: "
                     + ", ".join(
                         f"{k}={v.__name__ if hasattr(v, '__name__') else v}"
                         for k, v in variant.items()

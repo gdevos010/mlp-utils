@@ -73,7 +73,7 @@ class GatingMechanism(nn.Module):
         if isinstance(act_fn, type):
             layers.append(act_fn())
         else:
-            layers.append(act_fn)
+            layers.append(act_fn)  # type: ignore[unreachable]
 
         if dropout > 0:
             layers.append(nn.Dropout(dropout))

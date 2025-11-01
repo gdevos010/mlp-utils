@@ -64,7 +64,7 @@ ffn = FeedForward(
 
 The `NGPT` class implements the feed-forward block from the paper ["nGPT: Normalized Transformer with Representation Learning on the Hypersphere."](https://arxiv.org/html/2410.01131v2).
 
-This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere. 
+This module applies the nGPT update rule, which involves normalizing hidden states and using a learnable interpolation parameter (`alpha_m`) to update the representation on the hypersphere.
 
 You can use it as a standalone layer:
 
@@ -275,50 +275,150 @@ residual_mlp = ResidualWrapper(
 )
 ```
 
-### a not very accurate benchmark using toy dataset
+#### FiLM (Conditioning)
 
-| Model | Compile | Params | Runtime (s) | Configuration | Final Loss | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| mlp | True | 33.41K | 10.15 | `act_fn=GELU` | 0.221746 | Success |
-| mlp | True | 33.41K | 2.40 | `act_fn=ReLU` | 0.225678 | Success |
-| mlp | True | 33.41K | 2.39 | `act_fn=SiLU` | 0.215601 | Success |
-| mlp | True | 33.41K | 2.35 | `act_fn=ReluSquared` | 0.246249 | Success |
-| mlp | True | 33.41K | 2.53 | `act_fn=Gelu2` | 0.252107 | Success |
-| mlp | True | 33.41K | 2.44 | `act_fn=BSiLU` | 0.211360 | Success |
-| mlp | True | 33.41K | 2.51 | `act_fn=ReluNelu(<br>  (forward_fn): ReLU()<br>  (backward_fn): NeLU()<br>)` | 0.223811 | Success |
-| mlp | True | 33.41K | 2.38 | `act_fn=GELU, residual=True` | 0.255551 | Success |
-| mlp | True | 33.09K | 1.82 | `act_fn=GELU, use_norm=False` | 0.220111 | Success |
-| mlp | True | 33.22K | 2.38 | `act_fn=GELU, pre_norm=True` | 0.221599 | Success |
-| feedforward | True | 33.09K | 1.76 | `glu_variant=none, activation=GELU` | 0.207531 | Success |
-| feedforward | True | 49.73K | 1.90 | `glu_variant=glu` | 0.179443 | Success |
-| feedforward | True | 49.73K | 1.87 | `glu_variant=swiglu` | 0.306741 | Success |
-| feedforward | True | 49.73K | 1.89 | `glu_variant=geglu` | 0.304403 | Success |
-| feedforward | True | 49.73K | 1.82 | `glu_variant=reglu` | 0.293338 | Success |
-| feedforward | True | 49.73K | 1.70 | `glu_variant=bilinear` | 0.318753 | Success |
-| feedforward | True | 33.34K | 1.76 | `glu_variant=mglu` | 0.189905 | Success |
-| feedforward | True | 33.34K | 1.79 | `glu_variant=mswiglu` | 0.204473 | Success |
-| feedforward | True | 33.34K | 1.82 | `glu_variant=mgeglu` | 0.211235 | Success |
-| feedforward | True | 33.34K | 1.78 | `glu_variant=mreglu` | 0.213310 | Success |
-| feedforward | True | 33.34K | 1.73 | `glu_variant=mbilinear` | 0.236762 | Success |
-| fastfeedforward | True | 398.28K | 18.49 | `glu_variant=swiglu, expert_dim=8` | 0.176578 | Success |
-| fastfeedforward | True | 398.28K | 18.79 | `glu_variant=geglu, expert_dim=8` | 0.176054 | Success |
-| fastfeedforward | True | 267.21K | 18.12 | `glu_variant=mswiglu, expert_dim=8` | 0.173000 | Success |
-| fastfeedforward | True | 398.28K | 17.40 | `glu_variant=swiglu, expert_dim=8` | 0.171305 | Success |
-| fastfeedforward | True | 398.28K | 17.44 | `glu_variant=swiglu, expert_dim=8` | 0.174691 | Success |
-| fastfeedforward | True | 398.28K | 18.10 | `glu_variant=swiglu, expert_dim=8` | 0.172715 | Success |
-| pathweightedfff | True | 63.38K | 20.21 | `depth=3` | 0.246856 | Success |
-| pathweightedfff | True | 63.38K | 20.27 | `depth=3, activation=silu` | 0.250302 | Success |
-| pathweightedfff | True | 266.18K | 25.57 | `depth=5` | 0.237995 | Success |
-| ngpt | True | 49.73K | 2.48 | `scalar_alpha=True` | 0.005054 | Success |
-| ngpt | True | 49.79K | 2.40 | `scalar_alpha=False` | 0.005193 | Success |
-| gmlp | True | 218.11K | 10.33 | | 0.049925 | Success |
-| switch_ffn | True | 398.34K | 10.07 | `num_experts=8, ff_kwargs={'mult': 4,<br>  'glu_variant': 'swiglu'}` | 0.274261 | Success |
-| switch_ffn | True | 399.36K | 17.40 | `num_experts=16, ff_kwargs={'mult': 2,<br>  'glu_variant': 'geglu'}` | 0.362581 | Success |
+Feature-wise Linear Modulation (FiLM) conditions activations with per-feature scale and shift predicted from a conditioning signal.
+
+```python
+from mlp_utils.layers import FiLM, FiLMGenerator
+import torch
+
+# Shapes: x [B, T, D], cond [B, C] (global) or [B, T, C] (token-wise)
+x = torch.randn(2, 8, 256)
+cond = torch.zeros(2, 16)  # zero makes FiLM an identity at init
+
+gen = FiLMGenerator(cond_dim=16, feature_dim=256, token_wise=False)
+film = FiLM(feature_dim=256)
+
+gamma, beta = gen(cond)          # [B, D]
+y = film(x, gamma, beta)         # [B, T, D]
+```
+
+##### ResidualFiLM (pre-norm site)
+
+Wrap any module with a pre-norm residual FiLM hook. Zero conditioning is an exact no-op.
+
+```python
+from mlp_utils.layers import ResidualFiLM, FiLMGenerator
+import torch.nn as nn
+import torch
+
+dim = 256
+module = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Linear(dim, dim))
+gen = FiLMGenerator(cond_dim=32, feature_dim=dim, token_wise=False)
+wrapped = ResidualFiLM(module, feature_dim=dim, generator=gen)
+
+x = torch.randn(2, dim)
+cond = torch.zeros(2, 32)
+out = wrapped(x, cond)
+```
+
+##### FFNFiLM (gate the FFN hidden state)
+
+Apply FiLM to an FFN's intermediate activation for strong, stable control.
+
+```python
+from mlp_utils.layers import FFNFiLM, FiLMGenerator
+import torch
+
+dim = 256
+gen = FiLMGenerator(cond_dim=32, feature_dim=dim * 4, token_wise=False)
+ffn_film = FFNFiLM(dim=dim, hidden_mult=4, generator=gen)
+
+x = torch.randn(2, dim)
+cond = torch.randn(2, 32)
+out = ffn_film(x, cond)
+```
+
+##### LowRankFiLM and per-layer generators
+
+Use a small rank-K basis for FiLM to keep parameters tiny. Build shared or per-layer generators.
+
+```python
+from mlp_utils.layers import LowRankFiLM, FiLMGenerator, build_film_generators
+import torch
+
+rank = 4
+dim = 256
+lr_film = LowRankFiLM(feature_dim=dim, rank=rank)
+
+# coeffs shape: [..., 2 * rank]; here token-wise over a sequence
+coeffs = torch.zeros(2, 8, 2 * rank)
+y = lr_film(torch.randn(2, 8, dim), coeffs)
+
+# Build shared or per-layer FiLM generators
+shared_gen = build_film_generators(
+    shared=True,
+    num_layers=6,
+    factory=FiLMGenerator,
+    cond_dim=32,
+    feature_dim=dim,
+    token_wise=False,
+)
+
+per_layer_gens = build_film_generators(
+    shared=False,
+    num_layers=6,
+    factory=FiLMGenerator,
+    cond_dim=32,
+    feature_dim=dim,
+    token_wise=False,
+)
+```
+
+### a not very accurate benchmark using toy dataset
+# MNIST Training Summary
+
+| Model                        | Dim | Params  | Runtime (s) | Test Acc | Test Loss | Configuration                                                                 | Status  |
+|------------------------------|-----|---------|-------------|----------|-----------|-------------------------------------------------------------------------------|---------|
+| mlp                          | 158 | 205.41K | 92.91       | 78.67%   | 0.640622  | act_fn=GELU, budget=200.00K±5%, actual_params=205.41K                         | Success |
+| mlp                          | 158 | 205.41K | 150.48      | 78.46%   | 0.656069  | act_fn=ReLU, budget=200.00K±5%, actual_params=205.41K                         | Success |
+| mlp                          | 158 | 205.41K | 114.84      | 76.38%   | 0.725208  | act_fn=SiLU, budget=200.00K±5%, actual_params=205.41K                         | Success |
+| mlp                          | 158 | 205.41K | 39.40       | 78.70%   | 0.651187  | act_fn=ReluSquared, budget=200.00K±5%, actual_params=205.41K                  | Success |
+| mlp                          | 158 | 205.41K | 123.16      | 78.50%   | 0.645665  | act_fn=Gelu2, budget=200.00K±5%, actual_params=205.41K                         | Success |
+| mlp                          | 158 | 205.41K | 86.55       | 69.66%   | 0.904601  | act_fn=BSiLU, budget=200.00K±5%, actual_params=205.41K                         | Success |
+| mlp                          | 158 | 205.41K | 434.94      | 79.48%   | 0.631724  | act_fn=ReluNelu (forward_fn=ReLU, backward_fn=NeLU), budget=200.00K±5%        | Success |
+| mlp                          | 158 | 205.41K | 259.04      | 78.62%   | 0.650378  | act_fn=GELU, residual=True, budget=200.00K±5%, actual_params=205.41K           | Success |
+| mlp                          | 159 | 207.35K | 318.10      | 79.57%   | 0.600632  | act_fn=GELU, use_norm=False, budget=200.00K±5%, actual_params=207.35K          | Success |
+| mlp                          | 159 | 207.50K | 117.76      | 80.37%   | 0.590114  | act_fn=GELU, pre_norm=True, budget=200.00K±5%, actual_params=207.50K           | Success |
+| gmlp                         |  62 | 199.47K | 98.51       | 98.04%   | 0.062043  | budget=200.00K±5%, actual_params=199.47K                                      | Success |
+| gmlp                         |  62 | 199.47K | 106.58      | 98.24%   | 0.056188  | canonical_gate=True, budget=200.00K±5%, actual_params=199.47K                  | Success |
+| gmlp                         |  62 | 199.47K | 99.83       | 98.14%   | 0.056123  | drop_path=0.1, budget=200.00K±5%, actual_params=199.47K                        | Success |
+| gmlp                         |  62 | 199.47K | 90.14       | 98.08%   | 0.062160  | gate_activation=SiLU, budget=200.00K±5%, actual_params=199.47K                 | Success |
+| gmlp                         |  62 | 199.47K | 205.67      | 98.21%   | 0.063012  | canonical_gate=True, gate_activation=SiLU, budget=200.00K±5%, actual=199.47K   | Success |
+| gmlp                         |  62 | 199.47K | 88.33       | 98.59%   | 0.044483  | canonical_gate=True, drop_path=0.1, budget=200.00K±5%, actual=199.47K          | Success |
+| gmlp                         |  62 | 199.47K | 40.88       | 98.25%   | 0.056019  | canonical_gate=False, drop_path=0.1, budget=200.00K±5%, actual=199.47K         | Success |
+| feedforward                  | 159 | 207.35K | 29.76       | 80.06%   | 0.610332  | glu_variant=none, activation=GELU, budget=200.00K±5%, actual=207.35K           | Success |
+| feedforward                  | 126 | 195.06K | 29.32       | 81.01%   | 0.569265  | glu_variant=glu, budget=200.00K±5%, actual=195.06K                             | Success |
+| feedforward                  | 126 | 195.06K | 33.05       | 82.86%   | 0.526871  | glu_variant=swiglu, budget=200.00K±5%, actual=195.06K                          | Success |
+| feedforward                  | 126 | 195.06K | 13.49       | 79.33%   | 0.626115  | glu_variant=geglu, budget=200.00K±5%, actual=195.06K                           | Success |
+| feedforward                  | 126 | 195.06K | 33.14       | 82.04%   | 0.545428  | glu_variant=reglu, budget=200.00K±5%, actual=195.06K                           | Success |
+| feedforward                  | 126 | 195.06K | 11.28       | 61.64%   | 1.087680  | glu_variant=bilinear, budget=200.00K±5%, actual=195.06K                        | Success |
+| residual_film_ffn            | 120 | 206.17K | 31.50       | 84.54%   | 0.482169  | budget=200.00K±5%, actual_params=206.17K                                      | Success |
+| ffn_film                     | 108 | 190.09K | 22.24       | 77.93%   | 0.635031  | budget=200.00K±5%, actual_params=190.09K                                      | Success |
+| ffn_lowrank_film             | 156 | 205.93K | 29.48       | 81.02%   | 0.571604  | budget=200.00K±5%, actual_params=205.93K                                      | Success |
+| residual_film_stack_shared   |  70 | 190.41K | 33.20       | 86.41%   | 0.433458  | film_depth=3, budget=200.00K±5%, actual_params=190.41K                         | Success |
+| residual_film_stack_perlayer |  67 | 192.57K | 19.25       | 85.47%   | 0.452107  | film_depth=3, budget=200.00K±5%, actual_params=192.57K                         | Success |
+| feedforward                  | 158 | 205.41K | 37.62       | 79.34%   | 0.618405  | glu_variant=mglu, budget=200.00K±5%, actual=205.41K                            | Success |
+| feedforward                  | 158 | 205.41K | 20.14       | 77.85%   | 0.672264  | glu_variant=mswiglu, budget=200.00K±5%, actual=205.41K                         | Success |
+| feedforward                  | 158 | 205.41K | 20.06       | 77.80%   | 0.670321  | glu_variant=mgeglu, budget=200.00K±5%, actual=205.41K                          | Success |
+| feedforward                  | 158 | 205.41K | 15.57       | 76.75%   | 0.699149  | glu_variant=mreglu, budget=200.00K±5%, actual=205.41K                          | Success |
+| feedforward                  | 158 | 205.41K | 17.83       | 61.13%   | 1.090482  | glu_variant=mbilinear, budget=200.00K±5%, actual=205.41K                       | Success |
+| fastfeedforward              |  46 | 208.03K | 9.48        | 41.38%   | 1.982514  | glu_variant=swiglu, budget=200.00K±5%, actual=208.03K                          | Success |
+| fastfeedforward              |  46 | 208.03K | 15.46       | 63.97%   | 1.150880  | glu_variant=geglu, budget=200.00K±5%, actual=208.03K                           | Success |
+| fastfeedforward              |  55 | 199.45K | 32.14       | 60.84%   | 1.314935  | glu_variant=mswiglu, budget=200.00K±5%, actual=199.45K                         | Success |
+| pathweightedfff              | 111 | 191.17K | 58.14       | 68.43%   | 0.930329  | depth=3, budget=200.00K±5%, actual=191.17K                                     | Success |
+| pathweightedfff              | 111 | 191.17K | 77.54       | 70.16%   | 0.879889  | depth=3, activation=silu, budget=200.00K±5%, actual=191.17K                    | Success |
+| pathweightedfff              |  55 | 199.06K | 96.13       | 78.40%   | 0.659356  | depth=5, budget=200.00K±5%, actual=199.06K                                     | Success |
+| ngpt                         | 126 | 195.06K | 112.29      | 80.55%   | 0.621386  | scalar_alpha=True, budget=200.00K±5%, actual=195.06K                           | Success |
+| ngpt                         | 126 | 195.18K | 90.35       | 79.06%   | 0.678157  | scalar_alpha=False, budget=200.00K±5%, actual=195.18K                          | Success |
+| switch_ffn                   |  63 | 195.25K | 22.12       | 70.33%   | 0.876992  | num_experts=8, ff_kwargs={mult:2, glu_variant:swiglu}, budget=200.00K±5%       | Success |
+| switch_ffn                   |  46 | 208.80K | 124.47      | 74.18%   | 0.775046  | num_experts=16, ff_kwargs={mult:2, glu_variant:geglu}, budget=200.00K±5%       | Success |
 
 ## TODO
 
 - [] [Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node](https://arxiv.org/html/2405.16836v1)
-- [] limiting soft routing to top-k paths (stochastic top-k or beam) to reduce compute work during training 
+- [] limiting soft routing to top-k paths (stochastic top-k or beam) to reduce compute work during training
 
 
 ## Citations
@@ -381,43 +481,52 @@ residual_mlp = ResidualWrapper(
 
 ```bibtex
 @misc{belcak2023fastfeedforwardnetworks,
-      title={Fast Feedforward Networks}, 
+      title={Fast Feedforward Networks},
       author={Peter Belcak and Roger Wattenhofer},
       year={2023},
-      url={https://arxiv.org/abs/2308.14711}, 
+      url={https://arxiv.org/abs/2308.14711},
 }
 ```
 
 ```bibtex
 @misc{fedus2022switchtransformersscalingtrillion,
-      title={Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity}, 
+      title={Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity},
       author={William Fedus and Barret Zoph and Noam Shazeer},
       year={2022},
       eprint={2101.03961},
       archivePrefix={arXiv},
       primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2101.03961}, 
+      url={https://arxiv.org/abs/2101.03961},
 }
 ```
-<!-- 
+<!--
 ```bibtex
 # TODO
 @misc{charalampopoulos2024enhancingfastfeedforward,
-      title={Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node}, 
+      title={Enhancing Fast Feed Forward Networks with Load Balancing and a Master Leaf Node},
       author={Andreas Charalampopoulos and Nikolas Chatzis and Foivos Ntoulas-Panagiotopoulos and Charilaos Papaioannou and Alexandros Potamianos},
       year={2024},
       eprint={2405.16836},
       archivePrefix={arXiv},
       primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2405.16836}, 
+      url={https://arxiv.org/abs/2405.16836},
 }
 ``` -->
 
 ```bibtex
 @misc{belcak2023exponentiallyfasterlanguagemodelling,
-      title={Exponentially Faster Language Modelling}, 
+      title={Exponentially Faster Language Modelling},
       author={Peter Belcak and Roger Wattenhofer},
       year={2023},
-      url={https://arxiv.org/abs/2311.10770}, 
+      url={https://arxiv.org/abs/2311.10770},
+}
+```
+
+```bibtex
+@misc{perez2017filmvisualreasoninggeneral,
+      title={FiLM: Visual Reasoning with a General Conditioning Layer},
+      author={Ethan Perez and Florian Strub and Harm de Vries and Vincent Dumoulin and Aaron Courville},
+      year={2017},
+      url={https://arxiv.org/abs/1709.07871},
 }
 ```

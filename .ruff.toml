@@ -52,6 +52,8 @@ lint.ignore = [
     # pycodestyle-warning
     "W505", # doc-line-too-long
 
+    "D205" # 1 blank line required between summary line and description
+
 ]
 
 
@@ -85,6 +87,8 @@ exclude = [
     "node_modules",
     "venv",
     "docs",
+    "experiments",
+    "tests",
 ]
 
 # Allow unused variables when underscore-prefixed.
