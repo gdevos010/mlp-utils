@@ -5,7 +5,7 @@ description = "MLP utils"
 authors = [
     {name = "Greg DeVosNouri", email = "gdevos010@gmail.com"}
 ]
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.10"
 dependencies = [
     "einops>=0.8.1",
     "torch>=2.4.1",
