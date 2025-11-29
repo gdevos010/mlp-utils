@@ -45,4 +45,3 @@ addopts = [
     "--strict-config",
     "--color=yes",
 ]
-

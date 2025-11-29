@@ -1,5 +1,7 @@
+from .conditioning import FFNFiLM, ResidualFiLM, build_film_generators
 from .fastfeedforward import FastFeedForward
 from .feedforward import FeedForward
+from .film import FiLM, FiLMGenerator, LowRankFiLM
 from .gating import GatingMechanism
 from .glu import (
     GLU,

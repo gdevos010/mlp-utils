@@ -8,6 +8,14 @@ from .activations import (
     Sugar,
     SugarReLU,
 )
+from .layers import (
+    FFNFiLM,
+    FiLM,
+    FiLMGenerator,
+    LowRankFiLM,
+    ResidualFiLM,
+    build_film_generators,
+)
 from .layers.fastfeedforward import FastFeedForward
 from .layers.feedforward import FeedForward
 from .layers.gating import GatingMechanism
